@@ -3,7 +3,7 @@
   "description": "Deploy and operate full applications with Monk — cloud infra, SaaS integrations, and containerized workloads — from one chat. Bundles the monk skill and blocks accidental `monk` CLI shell-outs that would desync cluster state.",
   "version": "0.1.0",
   "author": {
-    "name": "Monk"
+    "name": "MonkOS Inc"
   },
   "homepage": "https://monk.io",
   "license": "MIT"

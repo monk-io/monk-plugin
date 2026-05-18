@@ -1,0 +1,12 @@
+{
+  "name": "monk",
+  "version": "0.1.0",
+  "description": "Deploy and operate full applications with Monk — cloud infra, SaaS integrations, and containerized workloads — from one chat.",
+  "author": {
+    "name": "MonkOS Inc"
+  },
+  "homepage": "https://monk.io",
+  "repository": "https://github.com/monk-io/monk-plugin",
+  "license": "MIT",
+  "keywords": ["monk", "devops", "deployment", "infrastructure", "mcp"]
+}

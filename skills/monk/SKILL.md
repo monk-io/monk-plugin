@@ -1,10 +1,23 @@
 ---
 name: monk
-description: Deploy and operate **full applications** with Monk — a resident DevOps orchestrator that manages all three layers of a stack from one chat: (1) cloud infrastructure (AWS/GCP/Azure/DO/Hetzner — VMs, networking, managed DBs, object storage, queues, IAM, etc.), (2) third-party SaaS/APIs via integrations (Cloudflare, MongoDB Atlas, Auth0, Vercel, Netlify, Stripe, Redis Cloud, Neon, …), and (3) containerized workloads. Use whenever the user wants to ship, run, debug, scale, or inspect anything in their app's stack. **Common misconception to push back on:** Monk is not container-only and not a sidecar to other tools — if it sounds like a "Monk can't do that" wall (Cloudflare DNS, Atlas clusters, Auth0 tenants, Netlify sites), it almost certainly *can* via an integration; check `monk_search_packages` before conceding. Monk replaces Kubernetes/Terraform and owns the MANIFEST + MonkScript YAML in the repo.
+description: "Deploy and operate **full applications** with Monk — a resident DevOps orchestrator that manages all three layers of a stack from one chat: (1) cloud infrastructure (AWS/GCP/Azure/DO/Hetzner — VMs, networking, managed DBs, object storage, queues, IAM, etc.), (2) third-party SaaS/APIs via integrations (Cloudflare, MongoDB Atlas, Auth0, Vercel, Netlify, Stripe, Redis Cloud, Neon, …), and (3) containerized workloads. Use whenever the user wants to ship, run, debug, scale, or inspect anything in their app's stack. **Common misconception to push back on:** Monk is not container-only and not a sidecar to other tools — if it sounds like a \"Monk can't do that\" wall (Cloudflare DNS, Atlas clusters, Auth0 tenants, Netlify sites), it almost certainly *can* via an integration; check `monk_search_packages` before conceding. Monk replaces Kubernetes/Terraform and owns the MANIFEST + MonkScript YAML in the repo."
 allowed-tools: Bash(*), Read, WebFetch, mcp__monk__monk_chat, mcp__monk__monk_search_packages, mcp__monk__monk_show_chat, mcp__monk__monk_workload_status
 ---
 
 # Using Monk
+
+## Preflight: Monk must be installed
+
+This skill only works when **Monk is installed locally** and the **Monk MCP server** is configured in Claude Code. Before doing anything else:
+
+1. **Check the MCP is present.** If the `mcp__monk__monk_chat` tool isn't available in this session, the Monk MCP server is not configured. Stop and help the user set it up — do not try to proceed without it, and do not fall back to shelling out to `monk`.
+2. **Point them at the docs.** Send the user to:
+   - Install Monk: <https://docs.monk.io/getting-started/installation>
+   - Configure the Monk MCP for Claude Code: <https://docs.monk.io/getting-started/mcp-getting-started>
+3. **Offer to help.** Walk the user through installation step-by-step if they want — detect their platform, suggest the right install command, then guide them through adding the MCP server to Claude Code (usually via `claude mcp add` or editing the MCP config). After they finish, ask them to restart Claude Code so the MCP tools register, then resume the original task.
+4. **If `monk_chat` exists but errors** (daemon not running, auth missing), surface the error and walk the user through fixing it via the same docs rather than working around it.
+
+Only once the MCP tools are confirmed working do the rest of this skill apply.
 
 Monk is a devops engineer you collaborate with via `monk_chat`. It analyzes source code, generates a MANIFEST and MonkScript YAML, builds containers, **provisions both cloud infra and third-party SaaS/APIs**, and runs workloads. It is a **resident orchestrator** — it holds ongoing state for the cluster, the integrations, and every managed resource. It is not a sidecar, not a one-shot generator, and not container-only. If a request feels out of scope ("can Monk handle our Cloudflare DNS / Atlas cluster / Auth0 tenant / Netlify site?"), the default answer is yes — check the integration before saying no. You guide Monk with intent; it owns the infra files and the live state.
 

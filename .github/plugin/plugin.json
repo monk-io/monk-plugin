@@ -1,0 +1,10 @@
+{
+  "name": "monk",
+  "version": "0.1.0",
+  "description": "Deploy and operate full applications with Monk — cloud infra, SaaS integrations, and containerized workloads — from one chat.",
+  "author": {
+    "name": "MonkOS Inc",
+    "url": "https://monk.io"
+  },
+  "skills": "skills/"
+}
