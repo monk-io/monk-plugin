@@ -36,7 +36,7 @@ $ChecksumTmp = Join-Path $InstallDir ".monk-agent.tmp.sha256"
 $ExtractDir = Join-Path $InstallDir ".monk-agent.extract"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
-Write-Error "Installing monk-agent from $Url"
+Write-Host "Installing monk-agent from $Url"
 Invoke-WebRequest -Uri $Url -OutFile $ArchiveTmp
 Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumTmp
 
