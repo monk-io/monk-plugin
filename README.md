@@ -1,74 +1,86 @@
 # Monk plugin for AI coding agents
 
-Deploy and operate full applications with [Monk](https://monk.io) — cloud
-infrastructure (AWS/GCP/Azure/DO/Hetzner), third-party SaaS integrations
-(Cloudflare, MongoDB Atlas, Auth0, Vercel, Stripe, …), and containerized
-workloads — from a single chat with your agent.
+Deploy and operate applications with [Monk](https://monk.io) from Claude,
+Codex, and Cursor without installing the VS Code Monk extension.
 
-The skill follows the open [Agent Skills](https://agentskills.io)
-specification, so it works in any compliant client — Claude Code, Cursor,
-OpenAI Codex, GitHub Copilot, VS Code, Gemini CLI, Amp, Goose, OpenHands,
-Junie, Kiro, and more. The repo ships plugin manifests for the major hosts
-so it can be installed natively in each.
+This repository is the portable plugin layer. It contains the agent skill,
+host manifests, Claude Code safety hook, and MVP subagent prompts. The local
+runtime companion is developed in the sibling `../monk-agent` repository.
 
-This plugin bundles:
+## MVP scope
 
-- The **`monk` skill** (`skills/monk/SKILL.md`) — instructions that teach the
-  agent how to talk to Monk via the Monk MCP server (build, deploy, inspect,
-  debug), what conventions to follow for app code, and how to verify deployed
-  apps end-to-end. Portable across all Agent Skills clients.
-- A **`PreToolUse` Bash hook** (Claude Code only) that blocks accidental
-  shell-outs to the `monk` CLI. Monk owns its own cluster state; running
-  `monk …` from a shell desyncs what Monk thinks is deployed from what
-  actually is. The hook denies these calls with a message redirecting Claude
-  to the `mcp__monk__monk_chat` tool. Other hosts rely on the prose rule in
-  the skill body to enforce the same constraint.
+The MVP target is intentionally narrow:
+
+- **Hosts:** Claude Code, OpenAI Codex, and Cursor.
+- **Runtime:** `monk-agent` plus Monk CLI/daemon (`monk` and `monkd`) installed
+  locally.
+- **Auth:** sign up/sign in through a localhost browser callback served by
+  `monk-agent`.
+- **Deploy:** local deploy and cloud deploy through Monk-supported providers.
+- **Secrets:** entered through `monk-agent` web UI, never pasted into agent chat.
+- **Safety:** privileged actions go through Monk/`monk-agent` approval flows.
+
+Other Agent Skills clients may be able to use the skill text, but they are
+best-effort until their MCP, hook, and subagent behavior is tested.
+
+## Architecture
+
+```text
+Claude / Codex / Cursor
+  -> monk plugin skill + subagents
+  -> local monk-agent MCP endpoint (127.0.0.1)
+  -> local monkd through @monk-io/monk (monk-ts2)
+  -> Monk runtime, clusters, workloads, secrets, integrations
+```
+
+The coding agent should not operate live Monk-managed infrastructure with
+shell commands. It should call `monk-agent` MCP tools and let Monk own runtime
+state. Local source-code inspection, tests, and normal app edits remain the
+coding agent's responsibility.
+
+## What this repo ships today
+
+- `skills/monk/SKILL.md`: portable Monk behavior instructions.
+- `agents/`: MVP subagent prompts for frontman, install, deploy, docs, and
+  MonkScript/editor workflows.
+- `scripts/ensure-monk-agent.sh` and `scripts/ensure-monk-agent.ps1`:
+  bootstrap installers for the local `monk-agent` companion.
+- `.claude-plugin/plugin.json`: Claude Code plugin manifest.
+- `.codex-plugin/plugin.json`: Codex plugin manifest.
+- `.cursor-plugin/plugin.json`: Cursor plugin manifest.
+- `.github/plugin/plugin.json`: GitHub Copilot / VS Code manifest placeholder.
+- `hooks/block-monk.sh`: Claude Code-only shell guard that blocks direct
+  `monk ...` CLI calls from the agent.
 
 ## Requirements
 
-- **Monk installed and running.** This plugin only works when Monk is installed
-  locally. See the [Monk installation guide](https://docs.monk.io/getting-started/installation).
-- **Monk MCP server configured** in Claude Code, so `mcp__monk__monk_chat` and
-  friends are available. Follow the
-  [Monk MCP getting-started guide](https://docs.monk.io/getting-started/mcp-getting-started).
-  If the MCP server is missing, Claude will help you install it on first use.
-- Claude Code with plugin support
-- `jq` on `PATH` (used by the hook script)
+- A host with plugin/skill support: Claude Code, Codex, or Cursor for MVP.
+- `monk-agent` installed locally. Plugin-capable hosts should run the bundled
+  bootstrap script during plugin installation or first activation.
+- Monk CLI and daemon installed locally, or installable by `monk-agent`.
+- `jq` on `PATH` only for the Claude Code hook.
 
 ## Install
 
 Repo URL: <https://github.com/monk-io/monk-plugin>
 
-**Claude Code:**
+Claude Code:
 
 ```text
 /plugin install monk-io/monk-plugin
 ```
 
-**Cursor** — install from Git or via marketplace (`/add-plugin`):
+Cursor:
 
 ```text
 /add-plugin https://github.com/monk-io/monk-plugin
 ```
 
-**OpenAI Codex** — add to a marketplace catalog or install directly:
+OpenAI Codex:
 
 ```text
 codex plugin install monk-io/monk-plugin
 ```
-
-**GitHub Copilot CLI / VS Code**:
-
-```text
-copilot plugin install monk-io/monk-plugin
-```
-
-In VS Code, run **Chat: Install Plugin From Source** and point at this repo.
-
-For any client that supports the [Agent Skills](https://agentskills.io) format
-but doesn't have a plugin install command, copy `skills/monk/` into the
-client's skills directory (typically `~/.<client>/skills/` or
-`<project>/.<client>/skills/`).
 
 For local development:
 
@@ -76,48 +88,68 @@ For local development:
 /plugin install /path/to/monk-plugin
 ```
 
-After install, restart Claude Code (or reload plugins) so the skill registers
-and the hook activates.
+After installation, restart or reload the host so the skill and MCP discovery
+refresh.
 
-## What the hook blocks
+### monk-agent bootstrap
 
-The hook fires on every `Bash` tool call and inspects the command string. It
-denies the call when `monk` appears in **command position**:
+The intended marketplace flow is:
 
-| Command                          | Result  |
-| -------------------------------- | ------- |
-| `monk run foo`                   | blocked |
-| `  monk status`                  | blocked |
-| `cd /tmp && monk ps`             | blocked |
-| `sudo monk deploy`               | blocked |
-| `x=1; monk go`                   | blocked |
-| `(monk init)`                    | blocked |
-| `monkey patch`                   | allowed |
-| `echo monk`                      | allowed |
-| `grep monk file`                 | allowed |
-| `ls`                             | allowed |
+1. The user installs the Monk plugin through the native host UI or command.
+2. The host runs the bundled `monk-agent` bootstrap script if `monk-agent` is
+   missing.
+3. `monk-agent` starts locally, prompts the user to sign up or sign in, and
+   exposes runtime install/status tools.
+4. The agent waits while `monk-agent` installs or repairs Monk runtime
+   components, then continues only after checks pass.
 
-Claude receives a denial message pointing it back to the Monk MCP tool, so it
-self-corrects without surfacing an error to you.
+Unix bootstrap:
 
-## Layout
-
-```text
-monk-plugin/
-├── .claude-plugin/plugin.json       # Claude Code manifest
-├── .cursor-plugin/plugin.json       # Cursor manifest
-├── .codex-plugin/plugin.json        # OpenAI Codex manifest
-├── .github/plugin/plugin.json       # GitHub Copilot / VS Code manifest
-├── skills/monk/SKILL.md             # Portable Agent Skill (agentskills.io)
-├── hooks/                           # Claude Code only
-│   ├── hooks.json
-│   └── block-monk.sh
-└── README.md
+```bash
+./scripts/ensure-monk-agent.sh
 ```
 
-All manifests point at the same `skills/monk/` directory — the skill itself
-is the single source of truth. Each tool reads the manifest it recognizes and
-ignores the others.
+Windows bootstrap:
+
+```powershell
+.\scripts\ensure-monk-agent.ps1
+```
+
+The bootstrap scripts install `monk-agent` to `~/.monk/bin` by default and
+download public, checksummed archives from `https://get.monk.io/nightly`.
+Set `MONK_AGENT_CHANNEL` to use another release channel, or
+`MONK_AGENT_DOWNLOAD_BASE` during development to point at local or staging
+artifacts.
+
+## Claude Code hook
+
+The Claude Code hook is defense-in-depth. It blocks shell commands where
+`monk` appears in command position, such as:
+
+| Command              | Result  |
+| -------------------- | ------- |
+| `monk run foo`       | blocked |
+| `cd /tmp && monk ps` | blocked |
+| `sudo monk deploy`   | blocked |
+| `monkey patch`       | allowed |
+| `echo monk`          | allowed |
+
+Other hosts do not use this hook yet. Their protection comes from the skill
+instructions and `monk-agent` tool gates.
+
+## Development notes
+
+The MVP runtime is in `/Users/nooga/monk/monk-agent`.
+
+Useful sibling checkouts:
+
+- `/Users/nooga/monk/monk-agent`: local MCP/dashboard runtime.
+- `/Users/nooga/monk/monk-ts2`: `@monk-io/monk` TypeScript client for local
+  `monkd` communication.
+- `/Users/nooga/monk/autospin`: hosted project analysis/build/deploy logic.
+- `/Users/nooga/monk/vscode-monk`: existing IDE product to mine for frontman
+  behavior, specialist agent routing, auth, install, onboarding, analytics,
+  analyzer, and tool-gate behavior.
 
 ## License
 
