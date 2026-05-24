@@ -87,7 +87,12 @@ jobs:
         run: |
           $statusPath = "$env:RUNNER_TEMP\status.json"
           & "$env:RUNNER_TEMP\monk-bin\monk-agent.exe" status | Tee-Object -FilePath $statusPath
-          $status = Get-Content -Raw $statusPath | ConvertFrom-Json
+          $rawStatus = Get-Content -Raw $statusPath
+          $jsonStart = $rawStatus.IndexOf("{")
+          if ($jsonStart -lt 0) {
+            throw "monk-agent status did not print JSON"
+          }
+          $status = $rawStatus.Substring($jsonStart) | ConvertFrom-Json
           if (-not $status.version) {
             throw "missing version in monk-agent status"
           }
