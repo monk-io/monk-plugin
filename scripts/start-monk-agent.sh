@@ -40,7 +40,39 @@ is_running() {
   return 1
 }
 
+hash_file() {
+  path="$1"
+  if [ ! -f "$path" ]; then
+    printf '\n'
+    return
+  fi
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$path" | awk '{print $1}'
+    return
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$path" | awk '{print $1}'
+    return
+  fi
+  printf '\n'
+}
+
 os="$(uname -s)"
+managed_agent_path="${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent"
+agent_hash_before="$(hash_file "$managed_agent_path")"
+
+agent_path="$("$CLAUDE_PLUGIN_ROOT/scripts/ensure-monk-agent.sh")"
+
+if [ ! -x "$agent_path" ]; then
+  echo "monk-agent is not executable at $agent_path" >&2
+  exit 2
+fi
+
+agent_hash_after="$(hash_file "$agent_path")"
+agent_updated=0
+if [ -n "$agent_hash_after" ] && [ "$agent_hash_before" != "$agent_hash_after" ]; then
+  agent_updated=1
+fi
 
 launchd_configured() {
   [ -f "$launchd_plist" ] &&
@@ -50,19 +82,12 @@ launchd_configured() {
     grep -q "<string>$agent_path_env</string>" "$launchd_plist"
 }
 
-if [ "$os" != "Darwin" ] && is_running; then
+if [ "$os" != "Darwin" ] && [ "$agent_updated" = "0" ] && is_running; then
   exit 0
 fi
 
-if [ "$os" = "Darwin" ] && is_running && launchd_configured; then
+if [ "$os" = "Darwin" ] && [ "$agent_updated" = "0" ] && is_running && launchd_configured; then
   exit 0
-fi
-
-agent_path="$("$CLAUDE_PLUGIN_ROOT/scripts/ensure-monk-agent.sh")"
-
-if [ ! -x "$agent_path" ]; then
-  echo "monk-agent is not executable at $agent_path" >&2
-  exit 2
 fi
 
 start_with_launchd() {
@@ -114,6 +139,12 @@ EOF
 }
 
 start_with_background_process() {
+  if [ -f "$pid_file" ]; then
+    old_pid="$(cat "$pid_file" 2>/dev/null || true)"
+    if [ -n "$old_pid" ]; then
+      kill "$old_pid" >/dev/null 2>&1 || true
+    fi
+  fi
   export MONK_AUTH_URL="$auth_url"
   export MONK_AGENT_AUTH_CLIENT_ID="$auth_client_id"
   export MONK_AUTH_AUDIENCE="$auth_audience"

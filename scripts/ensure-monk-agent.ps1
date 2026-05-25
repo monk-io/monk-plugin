@@ -7,17 +7,22 @@ $Channel = if ($env:MONK_AGENT_CHANNEL) { $env:MONK_AGENT_CHANNEL } else { "nigh
 $DownloadBase = if ($env:MONK_AGENT_DOWNLOAD_BASE) { $env:MONK_AGENT_DOWNLOAD_BASE } else {
   "https://get.monk.io/$Channel"
 }
-
-$Existing = Get-Command monk-agent.exe -ErrorAction SilentlyContinue
-if ($Existing) {
-  Write-Output $Existing.Source
-  exit 0
-}
+$AutoUpdate = if ($env:MONK_AGENT_AUTO_UPDATE) { $env:MONK_AGENT_AUTO_UPDATE } else { "1" }
 
 $Target = Join-Path $InstallDir "monk-agent.exe"
-if (Test-Path $Target) {
-  Write-Output $Target
-  exit 0
+$ChecksumInstalled = Join-Path $InstallDir "monk-agent.sha256"
+
+if ($AutoUpdate -eq "0" -or $AutoUpdate -eq "false") {
+  $Existing = Get-Command monk-agent.exe -ErrorAction SilentlyContinue
+  if ($Existing) {
+    Write-Output $Existing.Source
+    exit 0
+  }
+
+  if (Test-Path $Target) {
+    Write-Output $Target
+    exit 0
+  }
 }
 
 $Arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
@@ -36,11 +41,22 @@ $ChecksumTmp = Join-Path $InstallDir ".monk-agent.tmp.sha256"
 $ExtractDir = Join-Path $InstallDir ".monk-agent.extract"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
-Write-Host "Installing monk-agent from $Url"
-Invoke-WebRequest -Uri $Url -OutFile $ArchiveTmp
 Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumTmp
 
 $Expected = ((Get-Content -Raw $ChecksumTmp).Trim() -split "\s+")[0].ToLowerInvariant()
+
+if ((Test-Path $Target) -and (Test-Path $ChecksumInstalled)) {
+  $Installed = ((Get-Content -Raw $ChecksumInstalled).Trim() -split "\s+")[0].ToLowerInvariant()
+  if ($Installed -eq $Expected) {
+    Remove-Item -Force $ChecksumTmp
+    Write-Output $Target
+    exit 0
+  }
+}
+
+Write-Host "Installing monk-agent from $Url"
+Invoke-WebRequest -Uri $Url -OutFile $ArchiveTmp
+
 $Actual = (Get-FileHash -Algorithm SHA256 $ArchiveTmp).Hash.ToLowerInvariant()
 if ($Actual -ne $Expected) {
   Write-Error "Checksum verification failed for monk-agent."
@@ -53,6 +69,7 @@ if (Test-Path $ExtractDir) {
 New-Item -ItemType Directory -Force -Path $ExtractDir | Out-Null
 Expand-Archive -Force -Path $ArchiveTmp -DestinationPath $ExtractDir
 Move-Item -Force (Join-Path $ExtractDir "monk-agent.exe") $Target
+"$Expected  $Artifact" | Set-Content -NoNewline $ChecksumInstalled
 Remove-Item -Recurse -Force $ExtractDir
 Remove-Item -Force $ArchiveTmp, $ChecksumTmp
 Write-Output $Target
