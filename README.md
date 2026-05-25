@@ -104,6 +104,15 @@ The intended marketplace flow is:
 4. The agent waits while `monk-agent` installs or repairs Monk runtime
    components, then continues only after checks pass.
 
+Claude Code integration details:
+
+- `.mcp.json` registers the plugin-provided `monk` MCP server at
+  `http://127.0.0.1:7419/mcp`.
+- The `SessionStart` hook runs `scripts/start-monk-agent.sh`, which installs
+  `monk-agent` if needed and starts it on `127.0.0.1:7419`.
+- If the MCP server reports that authentication is required, run `/mcp` in
+  Claude Code and complete the browser sign-in flow.
+
 Unix bootstrap:
 
 ```bash

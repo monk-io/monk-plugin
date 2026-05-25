@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PreToolUse hook for the Bash tool: block any shell-out to the `monk` CLI.
 # Monk owns its own cluster state — running `monk ...` from a shell desyncs it.
-# Use the monk_chat MCP tool instead.
+# Use monk-agent MCP tools instead.
 
 set -euo pipefail
 
@@ -19,7 +19,7 @@ if printf '%s' "$command" | grep -Eq '(^|[;&|`(])[[:space:]]*(sudo[[:space:]]+)?
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason: "Blocked: do not shell out to the `monk` CLI — it desyncs the cluster state Monk manages. Use the `mcp__monk__monk_chat` tool to talk to Monk instead."
+      permissionDecisionReason: "Blocked: do not shell out to the `monk` CLI — it desyncs the cluster state Monk manages. Use the monk-agent MCP tools instead."
     }
   }'
   exit 0
