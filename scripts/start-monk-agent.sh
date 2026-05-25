@@ -6,6 +6,15 @@ host="${MONK_AGENT_HOST:-127.0.0.1}"
 auth_url="${MONK_AUTH_URL:-https://auth.monk.io}"
 auth_client_id="${MONK_AGENT_AUTH_CLIENT_ID:-UW84YWcJME3buMSLfqLX8IbBsYdNWi47}"
 auth_audience="${MONK_AUTH_AUDIENCE:-oaknode.com}"
+agent_path_env="${PATH:-/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}"
+case ":$agent_path_env:" in
+  *:/opt/homebrew/bin:*) ;;
+  *) agent_path_env="/opt/homebrew/bin:$agent_path_env" ;;
+esac
+case ":$agent_path_env:" in
+  *:/usr/local/bin:*) ;;
+  *) agent_path_env="/usr/local/bin:$agent_path_env" ;;
+esac
 monk_home="${MONK_AGENT_HOME:-"$HOME/.monk"}"
 data_dir="$monk_home/agent/launcher"
 log_dir="$data_dir/logs"
@@ -37,7 +46,8 @@ launchd_configured() {
   [ -f "$launchd_plist" ] &&
     grep -q "<string>$auth_client_id</string>" "$launchd_plist" &&
     grep -q "<string>$auth_url</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_audience</string>" "$launchd_plist"
+    grep -q "<string>$auth_audience</string>" "$launchd_plist" &&
+    grep -q "<string>$agent_path_env</string>" "$launchd_plist"
 }
 
 if [ "$os" != "Darwin" ] && is_running; then
@@ -85,6 +95,8 @@ start_with_launchd() {
     <string>$auth_client_id</string>
     <key>MONK_AUTH_AUDIENCE</key>
     <string>$auth_audience</string>
+    <key>PATH</key>
+    <string>$agent_path_env</string>
   </dict>
   <key>StandardOutPath</key>
   <string>$log_file</string>
@@ -105,6 +117,7 @@ start_with_background_process() {
   export MONK_AUTH_URL="$auth_url"
   export MONK_AGENT_AUTH_CLIENT_ID="$auth_client_id"
   export MONK_AUTH_AUDIENCE="$auth_audience"
+  export PATH="$agent_path_env"
   if command -v setsid >/dev/null 2>&1; then
     setsid "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &
   elif command -v nohup >/dev/null 2>&1; then
