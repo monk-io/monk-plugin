@@ -67,7 +67,8 @@ Repo URL: <https://github.com/monk-io/monk-plugin>
 Claude Code:
 
 ```text
-/plugin install monk-io/monk-plugin
+/plugin marketplace add monk-io/monk-plugin
+/plugin install monk@monk-plugins
 ```
 
 Cursor:

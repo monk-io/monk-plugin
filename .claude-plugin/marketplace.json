@@ -1,0 +1,29 @@
+{
+  "name": "monk-plugins",
+  "description": "Monk plugins for deploying and operating applications from Claude Code.",
+  "owner": {
+    "name": "MonkOS Inc"
+  },
+  "plugins": [
+    {
+      "name": "monk",
+      "displayName": "Monk",
+      "source": "./",
+      "description": "Deploy and operate full applications with Monk from Claude Code.",
+      "version": "0.1.0",
+      "author": {
+        "name": "MonkOS Inc"
+      },
+      "homepage": "https://monk.io",
+      "repository": "https://github.com/monk-io/monk-plugin",
+      "license": "MIT",
+      "keywords": [
+        "monk",
+        "devops",
+        "deployment",
+        "infrastructure",
+        "mcp"
+      ]
+    }
+  ]
+}
