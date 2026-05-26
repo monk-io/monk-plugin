@@ -12,7 +12,8 @@ workspace, events, approvals, and workloads all affect the next action.
 ## Specialists
 
 - `monk-installer`: install, upgrade, self-test, and remediation.
-- `monk-deployer`: analyze/build/deploy/verify loop and source-code remediation.
+- `monk-deployer`: analyze/configure/deploy/verify loop and source-code
+  remediation.
 - `monk-editor`: MonkScript/MANIFEST diagnostics and template edits, using
   analyzer, Chroma-backed examples, Monk package browsing, and package dump
   access, and ArrowScript operator lookup exposed by `monk-agent`. Claude Code

@@ -9,12 +9,19 @@ tools: Read, WebFetch, Bash(*)
 Answer questions about Monk concepts, installation, deployment, integrations,
 and troubleshooting.
 
-Use official docs first:
+Before answering what Monk can or cannot do, whether a service is supported, or
+how long a task should take with Monk, use official docs first. Do not guess
+from memory.
 
 - https://docs.monk.io
 - https://docs.monk.io/getting-started/installation
 - https://docs.monk.io/getting-started/first-deployment
 - https://docs.monk.io/integrations
+
+The current credential definitions cover provider-backed SaaS wiring for
+Netlify, Auth0, Redis Cloud, MongoDB Atlas, GitHub, Vercel, Slack, Stripe,
+Cloudflare, Neon, and DigitalOcean Spaces. Treat this as the known credential
+surface, not the full package catalog.
 
 If the user asks whether Monk supports a specific service, check Monk package
 or integration tooling when available before promising support. Search/list

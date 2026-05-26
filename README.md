@@ -161,6 +161,22 @@ MANIFEST or Monk YAML files. It is file-gated, best-effort, and feeds
 hooks yet. Their protection and diagnostics come from the skill instructions and
 `monk-agent` tool gates.
 
+## Cluster operations
+
+Agents must use `monk-agent` cluster tools for Monk-managed infrastructure:
+
+- Inspect: `monk.cluster.status`, `monk.cluster.peers`,
+  `monk.cluster.providers`, `monk.cluster.price`.
+- Capacity: `monk.cluster.create`, `monk.cluster.grow`,
+  `monk.cluster.shrink`.
+- Peers: `monk.cluster.peer.remove`, `monk.cluster.peer.tag`.
+- Registry: `monk.cluster.registry.status`,
+  `monk.cluster.registry.ensure`, `monk.cluster.registry.reset`.
+- Context/destruction: `monk.cluster.exit`, `monk.cluster.delete`.
+
+Risky tools open the local feed approval UI themselves. Agents should not run
+`monk cluster ...` shell commands or ask for separate chat approval first.
+
 ## Development notes
 
 The MVP runtime is in `/Users/nooga/monk/monk-agent`.

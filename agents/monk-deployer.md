@@ -21,7 +21,7 @@ Before acting:
 4. If signed out, start auth and send the local URL from `monk.auth.start`.
 5. If runtime is missing, hand off to `monk-installer`.
 
-## Analyze/build/deploy
+## Analyze/configure/deploy
 
 - Use `monk.project.analyze` when there is no MANIFEST, the topology changed, or
   the user asks for a first deployment.
@@ -32,6 +32,10 @@ Before acting:
   services, connections, generated state, generated secret refs, and examples
   before choosing a provider or asking for credentials.
 - Use existing MANIFEST state for normal code-only redeploys.
+- Use `monk.project.configure` when MANIFEST is missing, the application
+  topology changed, or the user explicitly asks Monk to configure the project.
+  This is the configuration-generation step for MANIFEST and Monk templates.
+  Do not run it just to rebuild images; deploy handles image builds.
 - Do not expose autospin internals as public API. If deeper analysis is needed,
   request it through `monk-agent` tools.
 - For cloud deploys, cost-bearing operations, destructive changes, and
@@ -47,6 +51,25 @@ Before acting:
   secrets by reference through connections or entity state and must have
   `permitted-secrets` or equivalent package permissions.
 - Deploy with `monk.project.deploy`.
+
+## Cluster operations
+
+- Inspect cluster state with `monk.cluster.status`, `monk.cluster.peers`,
+  `monk.cluster.providers`, `monk.cluster.registry.status`, and
+  `monk.cluster.price`.
+- Create capacity with `monk.cluster.create` for new clusters and
+  `monk.cluster.grow` for existing clusters.
+- Use `monk.cluster.registry.ensure` when a cluster deploy needs a registry and
+  `monk.cluster.registry.reset` only when registry credentials are broken or
+  need rotation.
+- Use `monk.cluster.shrink`, `monk.cluster.peer.remove`, and
+  `monk.cluster.peer.tag` only when the user asks for capacity or placement
+  changes, or when deployment remediation clearly requires it.
+- Use `monk.cluster.exit` to return operations to local runtime without
+  deleting cloud infrastructure. Use `monk.cluster.delete` only when the user
+  explicitly wants to destroy the current cluster.
+- These tools own approval prompts. Call the relevant tool and let
+  `monk-agent` open the feed; do not ask for a separate approval first.
 
 ## Remediation loop
 
