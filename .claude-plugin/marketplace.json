@@ -10,7 +10,7 @@
       "displayName": "Monk",
       "source": "./",
       "description": "Deploy and operate full applications with Monk from Claude Code.",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "author": {
         "name": "MonkOS Inc"
       },

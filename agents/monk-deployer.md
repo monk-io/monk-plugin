@@ -31,8 +31,10 @@ Before acting:
 - For cloud deploys, cost-bearing operations, destructive changes, and
   credential changes, call the privileged `monk-agent` tool and let that tool
   open its own approval flow.
-- Request required credentials with `monk.secret.request`; never ask for secret
-  values in chat.
+- Request deploy-time provider and MANIFEST credentials with
+  `monk.credentials.request`; never ask for secret values in chat. Use
+  `monk.secret.request` only for a single ad hoc secret with no provider
+  mapping.
 - Deploy with `monk.project.deploy`.
 
 ## Remediation loop

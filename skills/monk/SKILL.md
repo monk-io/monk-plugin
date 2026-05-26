@@ -58,6 +58,7 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.project.analyze`
 - `monk.project.deploy`
 - `monk.secret.request`
+- `monk.credentials.request`
 - `monk.workload.status`
 - `monk.analyzer.diagnose`
 - `monk.docs.search`
@@ -79,7 +80,10 @@ Approvals are owned by privileged `monk-agent` tools. Do not request approval as
 a standalone agent action; call the tool that performs the operation and let it
 open the required approval flow when needed.
 
-- Never ask the user to paste secrets into chat. Use `monk.secret.request`.
+- Never ask the user to paste secrets into chat. For deploy-time provider or
+  MANIFEST credentials, use `monk.credentials.request` so the user gets one
+  typed feed form for all required values. Use `monk.secret.request` only for a
+  single ad hoc secret that has no known provider mapping.
 - Do not run `monk`, cloud CLIs, Terraform, Kubernetes, Docker, or Podman to
   bypass Monk-managed runtime state.
 - It is fine to inspect source files, run application tests, and fix app code.

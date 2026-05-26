@@ -61,8 +61,10 @@ Blocked shell work:
 - Cloud deploys, destructive actions, credential changes, shell access, and
   cost-bearing operations must be performed through privileged `monk-agent`
   tools that open their own approval flow.
-- Secrets are always collected through `monk.secret.request`; never ask the user
-  to paste values in chat.
+- Deploy-time provider and MANIFEST credentials are collected through
+  `monk.credentials.request`; never ask the user to paste values in chat. Use
+  `monk.secret.request` only for a single ad hoc secret with no provider
+  mapping.
 
 ## Done condition
 
