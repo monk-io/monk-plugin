@@ -62,7 +62,13 @@ os="$(uname -s)"
 managed_agent_path="${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent"
 agent_hash_before="$(hash_file "$managed_agent_path")"
 
-agent_path="$("$CLAUDE_PLUGIN_ROOT/scripts/ensure-monk-agent.sh")"
+if [ -n "${MONK_AGENT_PATH:-}" ]; then
+  agent_path="$MONK_AGENT_PATH"
+elif [ "${MONK_AGENT_SKIP_ENSURE:-0}" = "1" ]; then
+  agent_path="$managed_agent_path"
+else
+  agent_path="$("$CLAUDE_PLUGIN_ROOT/scripts/ensure-monk-agent.sh")"
+fi
 
 if [ ! -x "$agent_path" ]; then
   echo "monk-agent is not executable at $agent_path" >&2

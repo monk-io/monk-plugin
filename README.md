@@ -103,6 +103,17 @@ For local development:
 After installation, restart or reload the host so the skill and MCP discovery
 refresh.
 
+To refresh a local Claude Code development install from sibling working copies:
+
+```sh
+./scripts/dev-update-local.sh
+```
+
+This builds `../monk-agent`, installs it to `~/.monk/bin`, restarts the local
+agent, and refreshes Claude's Monk plugin marketplace/cache copies. For
+already-open Claude Code sessions, run `/reload-plugins` after the script
+finishes.
+
 ### monk-agent bootstrap
 
 The intended marketplace flow is:
