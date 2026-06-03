@@ -94,8 +94,11 @@ Cursor:
 OpenAI Codex:
 
 ```text
-codex plugin install monk-io/monk-plugin
+codex marketplace add monk-io/monk-plugin
 ```
+
+Then restart Codex, open `/plugins`, choose the Monk Plugins marketplace, and
+install Monk.
 
 For local development:
 

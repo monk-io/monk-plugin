@@ -1,0 +1,20 @@
+{
+  "name": "monk-plugins",
+  "interface": {
+    "displayName": "Monk Plugins"
+  },
+  "plugins": [
+    {
+      "name": "monk",
+      "source": {
+        "source": "local",
+        "path": "./plugins/monk"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
