@@ -95,7 +95,7 @@ Cursor:
 OpenAI Codex:
 
 ```text
-codex plugin marketplace add monk-io/monk-plugin
+codex marketplace add monk-io/monk-plugin
 codex
 /plugins
 ```
@@ -112,7 +112,7 @@ For local Codex development:
 
 ```text
 deno task plugin:build
-codex plugin marketplace add ./dist/plugin
+codex marketplace add ./dist/plugin
 codex
 /plugins
 ```

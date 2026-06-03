@@ -8,7 +8,7 @@
       "name": "monk",
       "source": {
         "source": "local",
-        "path": "./"
+        "path": "./plugins/monk"
       },
       "policy": {
         "installation": "AVAILABLE",
