@@ -1,7 +1,7 @@
 ---
 name: monk
 description: "Deploy and operate applications with Monk through the local monk-agent MCP companion. Use when the user wants to install Monk, sign in, analyze a project, deploy locally or to cloud, inspect workloads, provide secrets securely, or troubleshoot Monk-managed infrastructure. MVP hosts are Claude Code, Codex, and Cursor."
-allowed-tools: Bash(*), Read, WebFetch, Task, mcp__monk__monk_agent_clear_state, mcp__monk__monk_auth_status, mcp__monk__monk_auth_start, mcp__monk__monk_install_status, mcp__monk__monk_install_run, mcp__monk__monk_runtime_status, mcp__monk__monk_session_init, mcp__monk__monk_project_analyze, mcp__monk__monk_project_configure, mcp__monk__monk_project_deploy, mcp__monk__monk_cluster_status, mcp__monk__monk_cluster_peers, mcp__monk__monk_cluster_providers, mcp__monk__monk_cluster_create, mcp__monk__monk_cluster_grow, mcp__monk__monk_cluster_shrink, mcp__monk__monk_cluster_peer_remove, mcp__monk__monk_cluster_peer_tag, mcp__monk__monk_cluster_delete, mcp__monk__monk_cluster_exit, mcp__monk__monk_cluster_price, mcp__monk__monk_cluster_registry_status, mcp__monk__monk_cluster_registry_ensure, mcp__monk__monk_cluster_registry_reset, mcp__monk__monk_cluster_forget, mcp__monk__monk_cluster_switch, mcp__monk__monk_cluster_join, mcp__monk__monk_secret_request, mcp__monk__monk_credentials_request, mcp__monk__monk_workload_status, mcp__monk__monk_analyzer_diagnose, mcp__monk__monk_docs_search, mcp__monk__monk_package_list, mcp__monk__monk_package_search, mcp__monk__monk_package_info, mcp__monk__monk_package_dump, mcp__monk__monk_dump, mcp__monk__monk_arrowscript_operator_groups, mcp__monk__monk_arrowscript_operator_list, mcp__monk__monk_arrowscript_operator_search, mcp__monk__monk_arrowscript_operator_doc, mcp__monk__monk_feedback_submit
+allowed-tools: Bash(*), Read, WebFetch, Task, mcp__monk__monk_agent_clear_state, mcp__monk__monk_auth_status, mcp__monk__monk_auth_start, mcp__monk__monk_install_status, mcp__monk__monk_install_run, mcp__monk__monk_runtime_status, mcp__monk__monk_session_init, mcp__monk__monk_project_analyze, mcp__monk__monk_project_configure, mcp__monk__monk_project_deploy, mcp__monk__monk_cluster_status, mcp__monk__monk_cluster_peers, mcp__monk__monk_cluster_providers, mcp__monk__monk_cluster_create, mcp__monk__monk_cluster_grow, mcp__monk__monk_cluster_shrink, mcp__monk__monk_cluster_peer_remove, mcp__monk__monk_cluster_peer_tag, mcp__monk__monk_cluster_delete, mcp__monk__monk_cluster_exit, mcp__monk__monk_cluster_price, mcp__monk__monk_cluster_registry_status, mcp__monk__monk_cluster_registry_ensure, mcp__monk__monk_cluster_registry_reset, mcp__monk__monk_cluster_forget, mcp__monk__monk_cluster_switch, mcp__monk__monk_cluster_join, mcp__monk__monk_secret_request, mcp__monk__monk_credentials_request, mcp__monk__monk_workload_status, mcp__monk__monk_workload_logs, mcp__monk__monk_workload_stop, mcp__monk__monk_workload_delete, mcp__monk__monk_workload_purge, mcp__monk__monk_workload_unload, mcp__monk__monk_analyzer_diagnose, mcp__monk__monk_docs_search, mcp__monk__monk_package_list, mcp__monk__monk_package_search, mcp__monk__monk_package_info, mcp__monk__monk_package_dump, mcp__monk__monk_dump, mcp__monk__monk_arrowscript_operator_groups, mcp__monk__monk_arrowscript_operator_list, mcp__monk__monk_arrowscript_operator_search, mcp__monk__monk_arrowscript_operator_doc, mcp__monk__monk_feedback_submit
 ---
 
 # Using Monk
@@ -88,6 +88,11 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.secret.request`
 - `monk.credentials.request`
 - `monk.workload.status`
+- `monk.workload.logs`
+- `monk.workload.stop`
+- `monk.workload.delete`
+- `monk.workload.purge`
+- `monk.workload.unload`
 - `monk.analyzer.diagnose`
 - `monk.docs.search`
 - `monk.package.list`
@@ -131,6 +136,16 @@ open the required approval flow when needed.
   them directly in the main agent.
 - Cloud deploys, destructive actions, workload shells, and credential changes
   require approval through `monk-agent`.
+- Workload lifecycle verbs are distinct. `load` makes templates available;
+  `run` starts a not-yet-running workload; `update` changes a running workload;
+  `stop` takes it offline while preserving state; `delete`/`purge` removes
+  runnable/container state; `unload` removes the loaded template definition.
+  Use `monk.workload.stop`, `monk.workload.delete`/`purge`, and
+  `monk.workload.unload`; they open feed approvals themselves. Never target
+  Monk-managed `system/*` workloads.
+- Use `monk.workload.logs` for bounded log tails or short bounded follow
+  windows. Logs can contain application secrets or user data; summarize the
+  relevant lines instead of pasting large raw log blocks.
 - Cluster creation, grow, shrink, peer removal, peer retagging, registry
   changes, exit, and delete must go through `monk.cluster.*` tools. The tools
   open the feed approval prompt when approval is required; do not run the

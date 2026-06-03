@@ -9,6 +9,14 @@ auth_audience="${MONK_AUTH_AUDIENCE:-oaknode.com}"
 autospin_url="${MONK_AUTOSPIN_URL:-wss://api.app.monk.io/autospin/}"
 agent_path_env="${PATH:-/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}"
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+case "$(uname -s 2>/dev/null || printf unknown)" in
+  MINGW*|MSYS*|CYGWIN*)
+    exec powershell.exe -NoProfile -ExecutionPolicy Bypass \
+      -File "$script_dir/start-monk-agent.ps1" "$@"
+    ;;
+esac
+
 plugin_root="${CLAUDE_PLUGIN_ROOT:-"$(dirname -- "$script_dir")"}"
 case ":$agent_path_env:" in
   *:/opt/homebrew/bin:*) ;;

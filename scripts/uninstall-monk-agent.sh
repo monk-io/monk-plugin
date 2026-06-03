@@ -1,6 +1,14 @@
 #!/usr/bin/env sh
 set -eu
 
+script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+case "$(uname -s 2>/dev/null || printf unknown)" in
+  MINGW*|MSYS*|CYGWIN*)
+    exec powershell.exe -NoProfile -ExecutionPolicy Bypass \
+      -File "$script_dir/uninstall-monk-agent.ps1" "$@"
+    ;;
+esac
+
 remove_runtime=0
 remove_data=1
 assume_yes=0

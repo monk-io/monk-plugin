@@ -11,6 +11,67 @@ $AutoUpdate = if ($env:MONK_AGENT_AUTO_UPDATE) { $env:MONK_AGENT_AUTO_UPDATE } e
 
 $Target = Join-Path $InstallDir "monk-agent.exe"
 $ChecksumInstalled = Join-Path $InstallDir "monk-agent.sha256"
+$MonkHome = if ($env:MONK_AGENT_HOME) { $env:MONK_AGENT_HOME } else { Join-Path $HOME ".monk" }
+$PidFile = Join-Path $MonkHome "agent\launcher\run\monk-agent.pid"
+
+function Get-FileSha256 {
+  param([string]$Path)
+  if (-not (Test-Path $Path)) {
+    return ""
+  }
+
+  if (Get-Command Get-FileHash -ErrorAction SilentlyContinue) {
+    return (Get-FileHash -Algorithm SHA256 $Path).Hash.ToLowerInvariant()
+  }
+
+  $Stream = [System.IO.File]::OpenRead($Path)
+  try {
+    $Sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+      $Hash = $Sha256.ComputeHash($Stream)
+    } finally {
+      $Sha256.Dispose()
+    }
+  } finally {
+    $Stream.Dispose()
+  }
+  return ([System.BitConverter]::ToString($Hash) -replace "-", "").ToLowerInvariant()
+}
+
+function Stop-ManagedAgent {
+  if (-not (Test-Path $PidFile)) {
+    return
+  }
+
+  $RawPid = (Get-Content -Raw $PidFile).Trim()
+  if (-not $RawPid) {
+    return
+  }
+
+  $OldProcess = Get-Process -Id ([int]$RawPid) -ErrorAction SilentlyContinue
+  if (-not $OldProcess) {
+    Remove-Item -Force $PidFile -ErrorAction SilentlyContinue
+    return
+  }
+
+  $ProcessPath = ""
+  try {
+    $ProcessPath = $OldProcess.Path
+  } catch {
+    $ProcessPath = ""
+  }
+
+  if (-not $ProcessPath -or ([IO.Path]::GetFileName($ProcessPath) -ieq "monk-agent.exe")) {
+    Stop-Process -Id $OldProcess.Id -Force -ErrorAction SilentlyContinue
+    try {
+      Wait-Process -Id $OldProcess.Id -Timeout 10 -ErrorAction SilentlyContinue
+    } catch {
+      Start-Sleep -Milliseconds 500
+    }
+  }
+
+  Remove-Item -Force $PidFile -ErrorAction SilentlyContinue
+}
 
 if ($AutoUpdate -eq "0" -or $AutoUpdate -eq "false") {
   $Existing = Get-Command monk-agent.exe -ErrorAction SilentlyContinue
@@ -57,7 +118,7 @@ if ((Test-Path $Target) -and (Test-Path $ChecksumInstalled)) {
 Write-Host "Installing monk-agent from $Url"
 Invoke-WebRequest -Uri $Url -OutFile $ArchiveTmp
 
-$Actual = (Get-FileHash -Algorithm SHA256 $ArchiveTmp).Hash.ToLowerInvariant()
+$Actual = Get-FileSha256 $ArchiveTmp
 if ($Actual -ne $Expected) {
   Write-Error "Checksum verification failed for monk-agent."
   exit 1
@@ -68,6 +129,7 @@ if (Test-Path $ExtractDir) {
 }
 New-Item -ItemType Directory -Force -Path $ExtractDir | Out-Null
 Expand-Archive -Force -Path $ArchiveTmp -DestinationPath $ExtractDir
+Stop-ManagedAgent
 Move-Item -Force (Join-Path $ExtractDir "monk-agent.exe") $Target
 "$Expected  $Artifact" | Set-Content -NoNewline $ChecksumInstalled
 Remove-Item -Recurse -Force $ExtractDir

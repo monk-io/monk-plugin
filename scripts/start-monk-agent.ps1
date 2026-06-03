@@ -36,7 +36,22 @@ function Get-FileSha256 {
   if (-not (Test-Path $Path)) {
     return ""
   }
-  return (Get-FileHash -Algorithm SHA256 $Path).Hash.ToLowerInvariant()
+  if (Get-Command Get-FileHash -ErrorAction SilentlyContinue) {
+    return (Get-FileHash -Algorithm SHA256 $Path).Hash.ToLowerInvariant()
+  }
+
+  $Stream = [System.IO.File]::OpenRead($Path)
+  try {
+    $Sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+      $Hash = $Sha256.ComputeHash($Stream)
+    } finally {
+      $Sha256.Dispose()
+    }
+  } finally {
+    $Stream.Dispose()
+  }
+  return ([System.BitConverter]::ToString($Hash) -replace "-", "").ToLowerInvariant()
 }
 
 function Stop-ManagedAgent {
@@ -63,6 +78,11 @@ function Stop-ManagedAgent {
 
   if (-not $ProcessPath -or ([IO.Path]::GetFileName($ProcessPath) -ieq "monk-agent.exe")) {
     Stop-Process -Id $OldProcess.Id -Force -ErrorAction SilentlyContinue
+    try {
+      Wait-Process -Id $OldProcess.Id -Timeout 10 -ErrorAction SilentlyContinue
+    } catch {
+      Start-Sleep -Milliseconds 500
+    }
   }
 }
 

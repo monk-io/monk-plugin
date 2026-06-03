@@ -1,6 +1,14 @@
 #!/usr/bin/env sh
 set -eu
 
+script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+case "$(uname -s 2>/dev/null || printf unknown)" in
+  MINGW*|MSYS*|CYGWIN*)
+    exec powershell.exe -NoProfile -ExecutionPolicy Bypass \
+      -File "$script_dir/ensure-monk-agent.ps1" "$@"
+    ;;
+esac
+
 install_dir="${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}"
 channel="${MONK_AGENT_CHANNEL:-stable}"
 download_base="${MONK_AGENT_DOWNLOAD_BASE:-"https://get.monk.io/$channel"}"

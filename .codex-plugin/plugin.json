@@ -1,6 +1,6 @@
 {
   "name": "monk",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "Deploy and operate full applications with Monk — cloud infra, SaaS integrations, and containerized workloads — from one chat.",
   "author": {
     "name": "MonkOS Inc",
@@ -17,6 +17,7 @@
     "mcp"
   ],
   "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Monk DevOps Agent",
     "shortDescription": "Deploy and operate applications with Monk from chat.",

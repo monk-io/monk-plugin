@@ -50,6 +50,7 @@ coding agent's responsibility.
   `scripts/start-monk-agent.cmd`: local launchers that install if needed,
   start `monk-agent`, and wait for the MCP endpoint.
 - `.claude-plugin/plugin.json`: Claude Code plugin manifest.
+- `.agents/plugins/marketplace.json`: Codex marketplace manifest.
 - `.codex-plugin/plugin.json`: Codex plugin manifest.
 - `.cursor-plugin/plugin.json`: Cursor plugin manifest.
 - `.github/plugin/plugin.json`: GitHub Copilot / VS Code manifest placeholder.
@@ -94,14 +95,29 @@ Cursor:
 OpenAI Codex:
 
 ```text
-codex plugin install monk-io/monk-plugin
+codex plugin marketplace add monk-io/monk-plugin
+codex
+/plugins
 ```
 
-For local development:
+In the plugin browser, open the `monk-plugins` marketplace and install Monk.
+
+For local Claude Code development:
 
 ```text
 /plugin install /path/to/monk-plugin
 ```
+
+For local Codex development:
+
+```text
+deno task plugin:build
+codex plugin marketplace add ./dist/plugin
+codex
+/plugins
+```
+
+In the plugin browser, open the `monk-plugins` marketplace and install Monk.
 
 After installation, restart or reload the host so the skill and MCP discovery
 refresh.
@@ -154,6 +170,17 @@ Cursor integration details:
 - Disabling the server or clearing host-side MCP auth is not a Monk sign-out by
   itself; after auth is cleared, the MCP endpoint must return `401` until Cursor
   obtains a new bearer token.
+
+Codex integration details:
+
+- `.agents/plugins/marketplace.json` exposes this generated plugin as the
+  `monk-plugins` marketplace.
+- `.codex-plugin/plugin.json` registers the `monk` skill and points Codex at the
+  bundled `.mcp.json`.
+- `.mcp.json` registers the plugin-provided `monk` MCP server at
+  `http://127.0.0.1:7419/mcp`.
+- If the MCP server reports that authentication is required, run
+  `codex mcp login monk` and complete the browser sign-in flow.
 
 Unix bootstrap:
 

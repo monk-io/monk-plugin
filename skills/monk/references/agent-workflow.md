@@ -40,6 +40,12 @@ For cluster work, inspect with `monk.cluster.status`, `monk.cluster.peers`,
 `monk.cluster.registry.reset`, `monk.cluster.exit`, or
 `monk.cluster.delete`. These tools trigger feed approvals themselves.
 
+For workload lifecycle cleanup, use `monk.workload.status` to inspect first,
+then `monk.workload.stop`, `monk.workload.delete`/`purge`, or
+`monk.workload.unload`. `stop` preserves runnable state; `delete`/`purge`
+removes runnable/container state; `unload` removes the loaded template
+definition. Do not operate on Monk-managed `system/*` workloads.
+
 Credential-backed SaaS targets currently include Netlify, Auth0, Redis Cloud,
 MongoDB Atlas, GitHub, Vercel, Slack, Stripe, Cloudflare, Neon, and
 DigitalOcean Spaces. Use package and docs tools to find more and to verify the
