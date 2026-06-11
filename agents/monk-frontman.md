@@ -113,6 +113,21 @@ Blocked shell work:
   capsule status, `monk.capsule.secrets.update` when MANIFEST secrets change
   (mode `local` for the current capsule, `global` for all future ones), and
   `monk.capsule.schedule.get`/`update` for up/down schedules.
+- Fixed-cluster CI/CD (build and deploy to the selected cluster on every push)
+  is set up with `monk.cicd.setup` once the project has a MANIFEST and a
+  cluster is selected. It needs GitHub credentials (via
+  `monk.credentials.request` provider `github`); the user approves the full
+  plan (90-day service token mint, GitHub secrets, workflow file) in the
+  dashboard. Use capsules for per-branch previews and CI/CD for a stable
+  always-on environment; they can coexist in one repository.
+- Entity-only cloud projects (workloads with `requires: cloud/<provider>`,
+  e.g. GCP Cloud Run via entities) do NOT need a compute cluster. The deploy
+  flow attaches the provider's stored credentials to the local daemon
+  automatically (joining a credentials-only local providers shell when
+  needed) and prompts in the dashboard if credentials are missing. To set
+  providers up explicitly — or when a deploy reports a missing cloud
+  provider — use `monk.cluster.provider.ensure`; never create a cloud
+  cluster just to run entities.
 - Deploy-time provider and MANIFEST credentials are collected through
   `monk.credentials.request`; never ask the user to paste values in chat. Use
   `monk.secret.request` only for a single ad hoc secret with no provider

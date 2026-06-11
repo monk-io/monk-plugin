@@ -1,7 +1,7 @@
 ---
 name: monk
 description: "Deploy and operate applications with Monk through the local monk-agent MCP companion. Use when the user wants to install Monk, sign in, analyze a project, deploy locally or to cloud, inspect workloads, provide secrets securely, or troubleshoot Monk-managed infrastructure. MVP hosts are Claude Code, Codex, and Cursor."
-allowed-tools: Bash(*), Read, WebFetch, Task, mcp__monk__monk_agent_clear_state, mcp__monk__monk_auth_status, mcp__monk__monk_auth_start, mcp__monk__monk_install_status, mcp__monk__monk_install_run, mcp__monk__monk_runtime_status, mcp__monk__monk_session_init, mcp__monk__monk_scope_status, mcp__monk__monk_scope_bind, mcp__monk__monk_org_usage, mcp__monk__monk_org_billing_alerts_get, mcp__monk__monk_org_billing_alerts_set, mcp__monk__monk_project_analyze, mcp__monk__monk_project_configure, mcp__monk__monk_project_deploy, mcp__monk__monk_environment_list, mcp__monk__monk_environment_select, mcp__monk__monk_capsule_setup, mcp__monk__monk_capsule_list, mcp__monk__monk_capsule_secrets_update, mcp__monk__monk_capsule_schedule_get, mcp__monk__monk_capsule_schedule_update, mcp__monk__monk_cluster_status, mcp__monk__monk_cluster_peers, mcp__monk__monk_cluster_providers, mcp__monk__monk_cluster_list, mcp__monk__monk_cluster_create, mcp__monk__monk_cluster_grow, mcp__monk__monk_cluster_shrink, mcp__monk__monk_cluster_peer_remove, mcp__monk__monk_cluster_peer_tag, mcp__monk__monk_cluster_delete, mcp__monk__monk_cluster_exit, mcp__monk__monk_cluster_price, mcp__monk__monk_cluster_estimate, mcp__monk__monk_cluster_registry_status, mcp__monk__monk_cluster_registry_ensure, mcp__monk__monk_cluster_registry_reset, mcp__monk__monk_cluster_forget, mcp__monk__monk_cluster_switch, mcp__monk__monk_cluster_join, mcp__monk__monk_secret_request, mcp__monk__monk_credentials_request, mcp__monk__monk_workload_status, mcp__monk__monk_workload_logs, mcp__monk__monk_workload_stop, mcp__monk__monk_workload_delete, mcp__monk__monk_workload_purge, mcp__monk__monk_workload_unload, mcp__monk__monk_analyzer_diagnose, mcp__monk__monk_docs_search, mcp__monk__monk_package_list, mcp__monk__monk_package_search, mcp__monk__monk_package_info, mcp__monk__monk_package_dump, mcp__monk__monk_dump, mcp__monk__monk_arrowscript_operator_groups, mcp__monk__monk_arrowscript_operator_list, mcp__monk__monk_arrowscript_operator_search, mcp__monk__monk_arrowscript_operator_doc, mcp__monk__monk_feedback_submit
+allowed-tools: Bash(*), Read, WebFetch, Task, mcp__monk__monk_agent_clear_state, mcp__monk__monk_auth_status, mcp__monk__monk_auth_start, mcp__monk__monk_install_status, mcp__monk__monk_install_run, mcp__monk__monk_runtime_status, mcp__monk__monk_session_init, mcp__monk__monk_scope_status, mcp__monk__monk_scope_bind, mcp__monk__monk_org_usage, mcp__monk__monk_org_billing_alerts_get, mcp__monk__monk_org_billing_alerts_set, mcp__monk__monk_project_analyze, mcp__monk__monk_project_configure, mcp__monk__monk_project_deploy, mcp__monk__monk_environment_list, mcp__monk__monk_environment_select, mcp__monk__monk_capsule_setup, mcp__monk__monk_capsule_list, mcp__monk__monk_capsule_secrets_update, mcp__monk__monk_capsule_schedule_get, mcp__monk__monk_capsule_schedule_update, mcp__monk__monk_cicd_setup, mcp__monk__monk_cluster_status, mcp__monk__monk_cluster_peers, mcp__monk__monk_cluster_providers, mcp__monk__monk_cluster_list, mcp__monk__monk_cluster_create, mcp__monk__monk_cluster_grow, mcp__monk__monk_cluster_shrink, mcp__monk__monk_cluster_peer_remove, mcp__monk__monk_cluster_peer_tag, mcp__monk__monk_cluster_delete, mcp__monk__monk_cluster_exit, mcp__monk__monk_cluster_provider_ensure, mcp__monk__monk_cluster_price, mcp__monk__monk_cluster_estimate, mcp__monk__monk_cluster_registry_status, mcp__monk__monk_cluster_registry_ensure, mcp__monk__monk_cluster_registry_reset, mcp__monk__monk_cluster_forget, mcp__monk__monk_cluster_switch, mcp__monk__monk_cluster_join, mcp__monk__monk_secret_request, mcp__monk__monk_credentials_request, mcp__monk__monk_workload_status, mcp__monk__monk_workload_logs, mcp__monk__monk_workload_stop, mcp__monk__monk_workload_delete, mcp__monk__monk_workload_purge, mcp__monk__monk_workload_unload, mcp__monk__monk_analyzer_diagnose, mcp__monk__monk_docs_search, mcp__monk__monk_package_list, mcp__monk__monk_package_search, mcp__monk__monk_package_info, mcp__monk__monk_package_dump, mcp__monk__monk_dump, mcp__monk__monk_arrowscript_operator_groups, mcp__monk__monk_arrowscript_operator_list, mcp__monk__monk_arrowscript_operator_search, mcp__monk__monk_arrowscript_operator_doc, mcp__monk__monk_feedback_submit
 ---
 
 # Using Monk
@@ -81,6 +81,7 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.capsule.secrets.update`
 - `monk.capsule.schedule.get`
 - `monk.capsule.schedule.update`
+- `monk.cicd.setup`
 - `monk.cluster.status`
 - `monk.cluster.peers`
 - `monk.cluster.providers`
@@ -92,6 +93,7 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.cluster.peer.tag`
 - `monk.cluster.delete`
 - `monk.cluster.exit`
+- `monk.cluster.provider.ensure`
 - `monk.cluster.price`
 - `monk.cluster.estimate`
 - `monk.cluster.registry.status`
@@ -143,6 +145,13 @@ agent restarts, or uncertainty about whether a long-running operation is still
 pending, approved, failed, or completed. It contains durable action and request
 items with dashboard URLs; inspect it before retrying approval-backed or
 cost-bearing operations so repeated calls do not create duplicate work.
+
+When an action fails, read the error details from `monk://workspace/feed` and
+quote them in chat — do not ask the user to fetch error text from the
+dashboard. Dashboard URLs returned by tools (`/?item=` or `/?action=`) are
+deep links: share them as-is when pointing the user at an approval or a
+running action; if the user already has the dashboard open, their existing
+tab reveals the linked item automatically.
 
 Use `monk://workspace/cluster-context` to know the current execution target.
 Cluster targeting is logical per workspace/session: `mode: "local"` means tools
@@ -230,15 +239,23 @@ open the required approval flow when needed.
   changes, exit, and delete must go through `monk.cluster.*` tools. The tools
   open the feed approval prompt when approval is required; do not run the
   equivalent `monk cluster ...` command in a shell.
-- These mutating cluster operations require a resolved scope (see "Scope: owner,
-  project, environment"). If `monk.scope.status` is `unbound` or `ambiguous`,
-  bind the workspace with `monk.scope.bind` before creating or managing
-  clusters.
+- These mutating cluster operations use the resolved scope when one exists (see
+  "Scope: owner, project, environment"). If `monk.scope.status` is `unbound`
+  and owner scopes are available, bind with `monk.scope.bind` first; if the
+  account has NO owner scopes (no subscription/trial/tokens, no team), do not
+  bind, re-authenticate, or bootstrap — proceed directly, the operations run
+  unscoped. Only `ambiguous` must be resolved before continuing.
 - After `monk.cluster.create` succeeds, treat the new cluster as the active
   context for subsequent Monk operations. Confirm with
   `monk://workspace/cluster-context` when needed. Do not call a shell-level
   cluster switch; use `monk.cluster.switch` or `monk.cluster.exit` for logical
   context changes.
+- If `monk.cluster.create` fails AFTER nodes were provisioned, re-run it with
+  the SAME parameters (same name, provider, region, count) — the create
+  resumes finalization on the existing nodes. Never retry under a new name:
+  that orphans the paid nodes and the new create can fail on leftover state.
+  To abandon the failed cluster instead, `monk.cluster.switch` to it and
+  destroy it with `monk.cluster.delete`.
 - If the user asks to reset or clear Monk Agent local state, use
   `monk.agent.clear_state` with `confirm:true`. This deletes local events,
   prompts, actions, credentials, stored auth tokens, sessions, and related

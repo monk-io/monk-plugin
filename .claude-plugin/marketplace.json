@@ -10,13 +10,13 @@
       "displayName": "Monk DevOps Agent",
       "source": "./",
       "description": "Deploy and operate full applications with Monk DevOps Agent from Claude Code.",
-      "version": "0.1.25",
+      "version": "0.1.26",
       "author": {
         "name": "MonkOS Inc"
       },
       "homepage": "https://monk.io",
       "repository": "https://github.com/monk-io/monk-plugin",
-      "license": "MIT",
+      "license": "Apache-2.0",
       "keywords": [
         "monk",
         "devops",

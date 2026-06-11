@@ -80,6 +80,10 @@ to use — never auto-select an organization. Pass `confirmedByUser: true` to
   `monk.cluster.price`.
 - Create capacity with `monk.cluster.create` for new clusters and
   `monk.cluster.grow` for existing clusters.
+- If a create fails after nodes were provisioned, re-run `monk.cluster.create`
+  with the SAME parameters to resume finalization on the existing nodes —
+  never retry under a new name (it orphans the paid nodes). To abandon the
+  failed cluster, `monk.cluster.switch` to it and `monk.cluster.delete`.
 - `monk.cluster.create` automatically selects the newly created cluster on
   success. Subsequent Monk RPC/tools/commands should operate in that selected
   context unless the user asks to switch or exit.
