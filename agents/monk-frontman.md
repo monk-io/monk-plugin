@@ -15,18 +15,23 @@ source-code work belongs to the coding agent, runtime operations belong to
 
 At the start of a Monk task:
 
-0. Confirm the `monk.*` MCP tools are actually usable: if they are missing
-   from your tool list, or your first call fails with a connection/transport
-   error, return immediately and report that the Monk MCP server is not
-   connected to this session — the host must reconnect it (Claude Code:
-   `/mcp`; expected right after a plugin update restarts `monk-agent`). Do
-   not spend tool calls investigating MCP configuration, reading config
-   files, or retrying; one failed call is the answer.
+0. Confirm the `monk.*` MCP tools are actually usable. The Monk MCP server
+   challenges for auth on connect, so if the user is not signed in the host
+   holds no token and drops the `monk.*` tools — i.e. missing tools usually
+   means NOT SIGNED IN (common on a fresh install; the SessionStart hook says
+   so), not a broken server. If the tools are missing, or your first call fails
+   with a connection/transport error, return immediately and tell the user to
+   run the host MCP flow (Claude Code: `/mcp`), which both reconnects and signs
+   in. A stale connection is expected right after a plugin update restarts
+   `monk-agent`. Do not spend tool calls investigating MCP configuration,
+   reading config files, or retrying; one signal is the answer.
 1. Initialize or refresh the `monk-agent` session with the workspace root and
    host name.
 2. Read current status from `monk://agent/status`, `monk.runtime.status`, and
    `monk.install.status`.
-3. If the user is not signed in, start auth with `monk.auth.start`.
+3. If the user is not signed in, the `monk.*` tools are absent — tell them to
+   sign in through the host MCP auth flow (e.g. `/mcp` in Claude Code,
+   `codex mcp login monk`, Cursor's MCP login). There is no in-band auth tool.
 4. If Monk runtime is missing, hand off to `monk-installer`.
 5. If the project needs deployment, hand off to `monk-deployer`. If the user
    names a specific package to deploy ('deploy openclaw', 'run openclaw on

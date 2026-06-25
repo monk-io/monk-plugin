@@ -9,7 +9,8 @@ take with Monk, check official docs at `docs.monk.io` and use
 1. Initialize session with workspace root.
 2. Check `monk.auth.status`.
 3. Check `monk.runtime.status`.
-4. If signed out, call `monk.auth.start` and send the returned local URL.
+4. If signed out, the `monk.*` tools are absent — direct the user to the host MCP
+   auth flow (`/mcp`, `codex mcp login monk`, or Cursor's MCP login) to sign in.
 5. If runtime is missing, call `monk.install.status` and surface install steps.
 6. Analyze the project.
 7. For new infrastructure, package-backed services, or MANIFEST/template

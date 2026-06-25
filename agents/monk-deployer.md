@@ -18,7 +18,9 @@ Before acting:
 2. Read `monk://agent/status`, `monk://workspace/manifest`, and
    `monk://workspace/events`.
 3. Check `monk.auth.status`, `monk.runtime.status`, and `monk.install.status`.
-4. If signed out, start auth and send the local URL from `monk.auth.start`.
+4. If signed out, the `monk.*` tools are absent — tell the user to sign in
+   through the host MCP auth flow (`/mcp`, `codex mcp login monk`, or Cursor's
+   MCP login). There is no in-band auth tool to call.
 5. If runtime is missing, hand off to `monk-installer`.
 
 If a previous Monk operation may still be running, timed out at the host layer,

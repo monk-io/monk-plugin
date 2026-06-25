@@ -36,8 +36,10 @@ Before deploying:
    does not advertise the MCP `roots` capability. Pass `workspaceRoot` as the
    absolute path to the project directory. Omit the call only if you have
    confirmed that Monk already has the correct workspace root bound.
-4. Confirm auth status. If signed out, start Monk auth and send the user to the
-   local sign-in URL returned by `monk.auth.start`.
+4. Confirm auth status with `monk.auth.status` (once the tools are available). If
+   signed out, sign in through Antigravity's MCP auth flow (step 1) — that flow
+   also establishes the upstream Monk session; there is no in-band tool to start
+   auth.
 5. Confirm runtime status. `monk-agent` requires Monk CLI and `monkd` locally.
    If missing or broken, use `monk.install.status` to inspect the
    platform-specific `humanExplanation`, `relationships`, `components`,
@@ -55,7 +57,6 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.agent.clear_state` (only when the user explicitly asks to clear local Monk Agent state)
 - `monk.agent.clear_history` (tidy completed dashboard tasks and resolved approvals; leaves live work and credentials intact)
 - `monk.auth.status`
-- `monk.auth.start`
 - `monk.install.status`
 - `monk.install.run`
 - `monk.runtime.status`
@@ -90,6 +91,8 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.cluster.provider.ensure`
 - `monk.cluster.price`
 - `monk.cluster.estimate`
+- `monk.cluster.ingress.status`
+- `monk.cluster.ingress.ensure`
 - `monk.cluster.registry.status`
 - `monk.cluster.registry.ensure`
 - `monk.cluster.registry.reset`
@@ -193,8 +196,8 @@ run.
   `stale: true` (served from cache) with `pendingPlatformOps > 0` (platform
   writes queued for retry). Keep working; queued writes flush when the control
   plane returns. An auth error ("not signed in" or token rejected) is NOT
-  transient — re-run `monk.auth.start` (or the host MCP auth flow) before
-  retrying.
+  transient — re-authenticate through Antigravity's MCP auth flow (see Preflight)
+  before retrying.
 
 ## Safety rules
 

@@ -1,7 +1,7 @@
 ---
 name: monk
 description: "Deploy and operate applications with Monk through the local monk-agent MCP companion. Use when the user wants to install Monk, sign in, analyze a project, deploy locally or to cloud, inspect workloads, provide secrets securely, or troubleshoot Monk-managed infrastructure. MVP hosts are Claude Code, Codex, and Cursor."
-allowed-tools: Bash(*), Read, WebFetch, Task, mcp__monk__monk_agent_clear_state, mcp__monk__monk_agent_clear_history, mcp__monk__monk_auth_status, mcp__monk__monk_auth_start, mcp__monk__monk_install_status, mcp__monk__monk_install_run, mcp__monk__monk_runtime_status, mcp__monk__monk_session_init, mcp__monk__monk_scope_status, mcp__monk__monk_scope_bind, mcp__monk__monk_org_usage, mcp__monk__monk_org_billing_alerts_get, mcp__monk__monk_org_billing_alerts_set, mcp__monk__monk_project_analyze, mcp__monk__monk_project_configure, mcp__monk__monk_project_deploy, mcp__monk__monk_environment_list, mcp__monk__monk_environment_select, mcp__monk__monk_capsule_setup, mcp__monk__monk_capsule_list, mcp__monk__monk_capsule_secrets_update, mcp__monk__monk_capsule_schedule_get, mcp__monk__monk_capsule_schedule_update, mcp__monk__monk_cicd_setup, mcp__monk__monk_cluster_status, mcp__monk__monk_cluster_peers, mcp__monk__monk_cluster_providers, mcp__monk__monk_cluster_list, mcp__monk__monk_cluster_create, mcp__monk__monk_cluster_grow, mcp__monk__monk_cluster_shrink, mcp__monk__monk_cluster_peer_remove, mcp__monk__monk_cluster_peer_tag, mcp__monk__monk_cluster_delete, mcp__monk__monk_cluster_exit, mcp__monk__monk_cluster_provider_ensure, mcp__monk__monk_cluster_price, mcp__monk__monk_cluster_estimate, mcp__monk__monk_cluster_registry_status, mcp__monk__monk_cluster_registry_ensure, mcp__monk__monk_cluster_registry_reset, mcp__monk__monk_cluster_forget, mcp__monk__monk_cluster_switch, mcp__monk__monk_cluster_join, mcp__monk__monk_watcher_status, mcp__monk__monk_watcher_setup, mcp__monk__monk_watcher_remove, mcp__monk__monk_secret_request, mcp__monk__monk_credentials_request, mcp__monk__monk_workload_status, mcp__monk__monk_workload_logs, mcp__monk__monk_workload_stop, mcp__monk__monk_workload_delete, mcp__monk__monk_workload_purge, mcp__monk__monk_workload_unload, mcp__monk__monk_analyzer_diagnose, mcp__monk__monk_docs_search, mcp__monk__monk_package_list, mcp__monk__monk_package_search, mcp__monk__monk_package_info, mcp__monk__monk_package_dump, mcp__monk__monk_dump, mcp__monk__monk_arrowscript_operator_groups, mcp__monk__monk_arrowscript_operator_list, mcp__monk__monk_arrowscript_operator_search, mcp__monk__monk_arrowscript_operator_doc, mcp__monk__monk_feedback_submit
+allowed-tools: Bash(*), Read, WebFetch, Task, mcp__monk__monk_agent_clear_state, mcp__monk__monk_agent_clear_history, mcp__monk__monk_auth_status, mcp__monk__monk_install_status, mcp__monk__monk_install_run, mcp__monk__monk_runtime_status, mcp__monk__monk_session_init, mcp__monk__monk_scope_status, mcp__monk__monk_scope_bind, mcp__monk__monk_org_usage, mcp__monk__monk_org_billing_alerts_get, mcp__monk__monk_org_billing_alerts_set, mcp__monk__monk_project_analyze, mcp__monk__monk_project_configure, mcp__monk__monk_project_deploy, mcp__monk__monk_environment_list, mcp__monk__monk_environment_select, mcp__monk__monk_capsule_setup, mcp__monk__monk_capsule_list, mcp__monk__monk_capsule_secrets_update, mcp__monk__monk_capsule_schedule_get, mcp__monk__monk_capsule_schedule_update, mcp__monk__monk_cicd_setup, mcp__monk__monk_cluster_status, mcp__monk__monk_cluster_peers, mcp__monk__monk_cluster_providers, mcp__monk__monk_cluster_list, mcp__monk__monk_cluster_create, mcp__monk__monk_cluster_grow, mcp__monk__monk_cluster_shrink, mcp__monk__monk_cluster_peer_remove, mcp__monk__monk_cluster_peer_tag, mcp__monk__monk_cluster_delete, mcp__monk__monk_cluster_exit, mcp__monk__monk_cluster_provider_ensure, mcp__monk__monk_cluster_price, mcp__monk__monk_cluster_estimate, mcp__monk__monk_cluster_ingress_status, mcp__monk__monk_cluster_ingress_ensure, mcp__monk__monk_cluster_registry_status, mcp__monk__monk_cluster_registry_ensure, mcp__monk__monk_cluster_registry_reset, mcp__monk__monk_cluster_forget, mcp__monk__monk_cluster_switch, mcp__monk__monk_cluster_join, mcp__monk__monk_watcher_status, mcp__monk__monk_watcher_setup, mcp__monk__monk_watcher_remove, mcp__monk__monk_secret_request, mcp__monk__monk_credentials_request, mcp__monk__monk_workload_status, mcp__monk__monk_workload_logs, mcp__monk__monk_workload_stop, mcp__monk__monk_workload_delete, mcp__monk__monk_workload_purge, mcp__monk__monk_workload_unload, mcp__monk__monk_analyzer_diagnose, mcp__monk__monk_docs_search, mcp__monk__monk_package_list, mcp__monk__monk_package_search, mcp__monk__monk_package_info, mcp__monk__monk_package_dump, mcp__monk__monk_dump, mcp__monk__monk_arrowscript_operator_groups, mcp__monk__monk_arrowscript_operator_list, mcp__monk__monk_arrowscript_operator_search, mcp__monk__monk_arrowscript_operator_doc, mcp__monk__monk_feedback_submit
 ---
 
 # Using Monk
@@ -17,40 +17,41 @@ clients are best-effort until tested.
 
 ## Preflight
 
-**Exception:** `monk.feedback.submit` does not require authentication and must
-be called immediately when the user asks to file a bug, feature, or integration
-request — skip all preflight steps and call it directly.
-
 Before deploying:
 
 1. Confirm the local Monk MCP tools/resources are available AND authenticated.
-   In the MVP these are backed by `monk-agent`. Verify with ONE cheap probe —
-   call `monk.runtime.status` or read `monk://agent/status` — before any other
-   work. Read the outcome carefully; the two failure modes need DIFFERENT fixes
-   and one probe is the answer (do not delegate to subagents, inspect MCP config
-   files, or probe repeatedly to diagnose it):
-   - Tools are PRESENT but a `monk.*` call returns an authentication challenge
-     ("authentication required", HTTP 401, or the host marks the `monk` server
-     "needs authentication"): the user is NOT SIGNED IN. This is the common
-     state on a fresh install — the tools are visible but execution is gated.
-     Tell the user to SIGN IN, then wait. Do NOT describe this as a connection
-     or restart problem.
-   - `monk.*` tools are entirely ABSENT from your tool list, or the probe fails
-     with a connection/transport error: the Monk MCP server is not connected.
-     Tell the user how to reconnect, then wait. Plugin updates restart
-     `monk-agent`, so an existing session can hold a stale connection — the
-     expected cause right after an update.
-     How to sign in / connect (use the host flow before `monk.auth.start`):
-   - Claude Code: run `/mcp` and authenticate the `monk` server.
+   In the MVP these are backed by `monk-agent`. The Monk MCP server challenges
+   for authentication on connect, so until the user signs in the host has no
+   valid token and the `monk.*` tools will be ABSENT from your tool list (the
+   host drops an unauthenticated server's tools). This is the normal state on a
+   fresh install — it is an AUTH state, NOT a "server is down" state. The
+   SessionStart hook injects an explicit note when the agent is running but
+   signed out; trust it.
+   - If a SessionStart note says the agent is running but you are NOT signed in,
+     OR the `monk.*` tools are absent right after install: the user needs to
+     SIGN IN. Tell them to sign in, then wait. Do NOT describe this as a
+     connection or restart problem, and do NOT keep probing to diagnose it.
+   - If the tools were present and working earlier this session and a `monk.*`
+     call now fails with a connection/transport error: the MCP connection went
+     stale. Plugin updates restart `monk-agent`, so this is expected right after
+     an update — tell the user to reconnect, then wait.
+     Either way the fix is the host MCP flow — do not delegate to subagents,
+     inspect MCP config files, or retry in a loop; one signal is the answer.
+     How to sign in / reconnect — always the host MCP auth flow (there is no in-band
+     sign-in tool; the host flow also establishes the agent's Monk session):
+   - Claude Code: run `/mcp` and authenticate the `monk` server (this both
+     reconnects and signs in).
    - Codex CLI: `codex mcp login monk`.
    - Cursor: the MCP login flow for the `monk` server.
-   - Host-cleared MCP auth should mean no bearer token is sent; in that state,
-     Monk MCP rejects gated requests (tool calls and resource reads) until the
-     host completes OAuth again — discovery (listing tools) still works, which
-     is why you can see the tools before sign-in.
+     A `401`/`Unauthorized` on a `monk.*` call that worked earlier this session
+     means the host's MCP token lapsed — re-run the host auth flow above; it is NOT
+     a reason to look for an in-band auth tool.
      Never work around an unready Monk by shelling out to `monk`/`monkd`, Docker,
      or another hosting platform, and never propose a non-Monk deploy target: get
      Monk signed in / connected and continue.
+     To file a bug, feature, or integration request, use `monk.feedback.submit`
+     once signed in (it reaches the Monk team directly). If you cannot sign in at
+     all, the local dashboard's feedback form still works.
 2. If they are missing, use the installer workflow. Host install hooks should
    run `scripts/start-monk-agent.sh` on macOS/Linux or
    `scripts/start-monk-agent.ps1` on Windows so the local MCP server is
@@ -65,8 +66,10 @@ Before deploying:
    - you want to record host/client/plugin-version metadata for telemetry.
      When you do call it, pass the absolute project directory as `workspaceRoot`.
      `monk-agent` never falls back to its own working directory.
-4. Confirm auth status. If signed out, start Monk auth and send the user to the
-   local sign-in URL returned by `monk.auth.start`.
+4. Confirm auth status with `monk.auth.status` (once the tools are available). If
+   signed out, the agent signs in through the host MCP auth flow from step 1 —
+   that flow also establishes the upstream Monk session, so there is no separate
+   tool to start auth.
 5. Confirm runtime status. `monk-agent` requires Monk CLI and `monkd` locally.
    If missing or broken, use `monk.install.status` to inspect the
    platform-specific `humanExplanation`, `relationships`, `components`,
@@ -84,7 +87,6 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.agent.clear_state` (only when the user explicitly asks to clear local Monk Agent state)
 - `monk.agent.clear_history` (tidy completed dashboard tasks and resolved approvals; leaves live work and credentials intact)
 - `monk.auth.status`
-- `monk.auth.start`
 - `monk.install.status`
 - `monk.install.run`
 - `monk.runtime.status`
@@ -119,6 +121,8 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.cluster.provider.ensure`
 - `monk.cluster.price`
 - `monk.cluster.estimate`
+- `monk.cluster.ingress.status`
+- `monk.cluster.ingress.ensure`
 - `monk.cluster.registry.status`
 - `monk.cluster.registry.ensure`
 - `monk.cluster.registry.reset`
@@ -229,8 +233,8 @@ run.
   `stale: true` (served from cache) with `pendingPlatformOps > 0` (platform
   writes queued for retry). Keep working; queued writes flush when the control
   plane returns. An auth error ("not signed in" or token rejected) is NOT
-  transient — re-run `monk.auth.start` (or the host MCP auth flow) before
-  retrying.
+  transient — re-authenticate through the host MCP auth flow (see Preflight)
+  before retrying.
 
 ## Safety rules
 
