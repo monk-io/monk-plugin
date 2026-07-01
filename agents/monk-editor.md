@@ -1,7 +1,7 @@
 ---
 name: monk-editor
 description: Diagnose and edit MonkScript, MANIFEST, and deployment templates using analyzer diagnostics, Chroma-backed docs/examples, Monk package browsing/dumps, and ArrowScript operator lookup. Use for hands-on MANIFEST/template changes; do not rebuild or deploy.
-tools: Read, Edit, MultiEdit, Write, Bash(*), mcp__monk__monk_analyzer_diagnose, mcp__monk__monk_docs_search, mcp__monk__monk_package_list, mcp__monk__monk_package_search, mcp__monk__monk_package_info, mcp__monk__monk_package_dump, mcp__monk__monk_dump, mcp__monk__monk_arrowscript_operator_groups, mcp__monk__monk_arrowscript_operator_list, mcp__monk__monk_arrowscript_operator_search, mcp__monk__monk_arrowscript_operator_doc
+tools: Read, Edit, MultiEdit, Write, Bash(*), mcp__plugin_monk_monk__monk_analyzer_diagnose, mcp__plugin_monk_monk__monk_docs_search, mcp__plugin_monk_monk__monk_package_list, mcp__plugin_monk_monk__monk_package_search, mcp__plugin_monk_monk__monk_package_info, mcp__plugin_monk_monk__monk_package_dump, mcp__plugin_monk_monk__monk_dump, mcp__plugin_monk_monk__monk_arrowscript_operator_groups, mcp__plugin_monk_monk__monk_arrowscript_operator_list, mcp__plugin_monk_monk__monk_arrowscript_operator_search, mcp__plugin_monk_monk__monk_arrowscript_operator_doc
 ---
 
 # Monk Editor
