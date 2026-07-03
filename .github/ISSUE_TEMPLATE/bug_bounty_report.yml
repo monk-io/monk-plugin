@@ -1,0 +1,101 @@
+name: Bug bounty report
+description: Report something broken, slow, or confusing in the Monk plugin.
+title: "[Bug bounty] "
+labels:
+  - bug-bounty
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for hunting bugs! **Security and data-loss findings go to
+        security@monk.io** — please don't file those here.
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Stage
+      description: Where did you hit this?
+      options:
+        - install
+        - connect
+        - build
+        - deploy
+        - operate
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Coding agent
+      options:
+        - Claude Code
+        - Cursor
+        - OpenAI Codex
+        - Google Antigravity
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: agent-version
+    attributes:
+      label: Coding agent version
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Repro steps
+      description: Exact steps to reproduce, from a clean state if possible.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity (your guess)
+      description: The Monk team makes the final call when scoring.
+      options:
+        - crash
+        - blocker
+        - major
+        - minor
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "e.g. macOS 15.4, Ubuntu 24.04, Windows 11 + WSL"
+    validations:
+      required: true
+  - type: input
+    id: monkd-version
+    attributes:
+      label: monkd version
+      placeholder: "monk --version"
+    validations:
+      required: true
+  - type: input
+    id: cloud
+    attributes:
+      label: Target cloud
+      placeholder: "e.g. AWS, GCP, Azure, DigitalOcean"
+    validations:
+      required: true
+  - type: input
+    id: integration
+    attributes:
+      label: Integration (if relevant)
+      placeholder: "e.g. Stripe, Supabase, Cloudflare"
+    validations:
+      required: false
