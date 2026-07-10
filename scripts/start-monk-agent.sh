@@ -10,6 +10,12 @@ autospin_url="${MONK_AUTOSPIN_URL:-wss://api.app.monk.io/autospin/}"
 agent_path_env="${PATH:-/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}"
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 
+# Rendered at plugin build time; carries MONK_PLUGIN_VERSION so the agent can
+# report the real plugin version in telemetry. Guarded: an older rendered
+# plugin without the file must still launch (the agent falls back to a labeled
+# agent-binary version).
+[ -f "$script_dir/plugin-version.sh" ] && . "$script_dir/plugin-version.sh"
+
 case "$(uname -s 2>/dev/null || printf unknown)" in
   MINGW*|MSYS*|CYGWIN*)
     exec powershell.exe -NoProfile -ExecutionPolicy Bypass \
@@ -206,12 +212,17 @@ launchd_configured() {
   # session tore down an already-running, already-authenticated agent and raced
   # the cold-start auth read in emit_signin_nudge. PATH is still refreshed
   # in the plist whenever a real restart happens for another reason.
+  # MONK_PLUGIN_VERSION IS included (unlike PATH): it changes only on a plugin
+  # install/upgrade — rare, stable within a plugin install, and exactly the
+  # moment the agent should restart so telemetry reports the new version. It
+  # cannot cause the per-session restart churn PATH did.
   [ -f "$launchd_plist" ] &&
     grep -q "<string>$auth_client_id</string>" "$launchd_plist" &&
     grep -q "<string>$auth_url</string>" "$launchd_plist" &&
     grep -q "<string>$auth_audience</string>" "$launchd_plist" &&
     grep -q "<string>$autospin_url</string>" "$launchd_plist" &&
-    grep -q "<string>${MONK_AGENT_LOCAL:-}</string>" "$launchd_plist"
+    grep -q "<string>${MONK_AGENT_LOCAL:-}</string>" "$launchd_plist" &&
+    grep -q "<string>${MONK_PLUGIN_VERSION:-}</string>" "$launchd_plist"
 }
 
 if [ "${MONK_AGENT_SKIP_ENSURE:-0}" != "1" ]; then
@@ -262,6 +273,8 @@ start_with_launchd() {
     <string>$autospin_url</string>
     <key>MONK_AGENT_LOCAL</key>
     <string>${MONK_AGENT_LOCAL:-}</string>
+    <key>MONK_PLUGIN_VERSION</key>
+    <string>${MONK_PLUGIN_VERSION:-}</string>
     <key>PATH</key>
     <string>$agent_path_env</string>
   </dict>
@@ -293,6 +306,7 @@ start_with_background_process() {
   export MONK_AUTOSPIN_URL="$autospin_url"
   export PATH="$agent_path_env"
   export MONK_AGENT_LOCAL="${MONK_AGENT_LOCAL:-}"
+  export MONK_PLUGIN_VERSION="${MONK_PLUGIN_VERSION:-}"
   if command -v setsid >/dev/null 2>&1; then
     setsid "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &
   elif command -v nohup >/dev/null 2>&1; then

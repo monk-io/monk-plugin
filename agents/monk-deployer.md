@@ -150,7 +150,7 @@ with no local build), skip this section and continue from step 5 above.
   on a bare IP:port without HTTPS or a domain. The enable typically succeeds once
   the cluster's system templates finish syncing: surface the pending state to
   the user, retry enabling ingress, and verify the routes serve on 80/443.
-- Use `monk.cluster.shrink`, `monk.cluster.peer.remove`, and
+- Use `monk.cluster.peer.remove` and
   `monk.cluster.peer.tag` only when the user asks for capacity or placement
   changes, or when deployment remediation clearly requires it.
 - Use `monk.cluster.exit` to return operations to local runtime without

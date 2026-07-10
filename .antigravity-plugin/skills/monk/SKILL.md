@@ -90,7 +90,6 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.cluster.list`
 - `monk.cluster.create`
 - `monk.cluster.grow`
-- `monk.cluster.shrink`
 - `monk.cluster.peer.remove`
 - `monk.cluster.peer.tag`
 - `monk.cluster.delete`

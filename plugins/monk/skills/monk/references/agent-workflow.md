@@ -42,7 +42,7 @@ the org's cluster RBAC policy. Optionally pick a target environment with
 `monk.cluster.status`, `monk.cluster.peers`,
 `monk.cluster.providers`, `monk.cluster.registry.status`, and
 `monk.cluster.price`. Change cluster state only with `monk.cluster.create`,
-`monk.cluster.grow`, `monk.cluster.shrink`, `monk.cluster.peer.remove`,
+`monk.cluster.grow`, `monk.cluster.peer.remove`,
 `monk.cluster.peer.tag`, `monk.cluster.registry.ensure`,
 `monk.cluster.registry.reset`, `monk.cluster.exit`, or
 `monk.cluster.delete`. These tools trigger feed approvals themselves.
