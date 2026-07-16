@@ -57,7 +57,7 @@ Or, pointing directly at the plugin repo:
 ### OpenAI Codex
 
 ```text
-codex marketplace add monk-io/monk-plugin
+codex plugin marketplace add monk-io/monk-plugin
 ```
 
 Then start `codex`, run `/plugins`, open the `monk-plugins` marketplace, and
