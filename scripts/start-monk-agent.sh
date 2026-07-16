@@ -38,6 +38,7 @@ log_dir="$data_dir/logs"
 run_dir="$data_dir/run"
 log_file="$log_dir/monk-agent.log"
 pid_file="$run_dir/monk-agent.pid"
+path_file="$run_dir/monk-agent.path"
 launchd_label="io.monk.agent"
 launchd_plist="$HOME/Library/LaunchAgents/$launchd_label.plist"
 
@@ -183,14 +184,19 @@ hash_file() {
 
 os="$(uname -s)"
 managed_agent_path="${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent"
-agent_hash_before="$(hash_file "$managed_agent_path")"
+agent_hash_before=""
+managed_agent_ensured=0
+custom_agent_path=0
 
 if [ -n "${MONK_AGENT_PATH:-}" ]; then
   agent_path="$MONK_AGENT_PATH"
+  custom_agent_path=1
 elif [ "${MONK_AGENT_SKIP_ENSURE:-0}" = "1" ]; then
   agent_path="$managed_agent_path"
 else
+  agent_hash_before="$(hash_file "$managed_agent_path")"
   agent_path="$("$plugin_root/scripts/ensure-monk-agent.sh")"
+  managed_agent_ensured=1
 fi
 
 if [ ! -x "$agent_path" ]; then
@@ -198,10 +204,12 @@ if [ ! -x "$agent_path" ]; then
   exit 2
 fi
 
-agent_hash_after="$(hash_file "$agent_path")"
 agent_updated=0
-if [ -n "$agent_hash_after" ] && [ "$agent_hash_before" != "$agent_hash_after" ]; then
-  agent_updated=1
+if [ "$managed_agent_ensured" = "1" ]; then
+  agent_hash_after="$(hash_file "$agent_path")"
+  if [ -n "$agent_hash_after" ] && [ "$agent_hash_before" != "$agent_hash_after" ]; then
+    agent_updated=1
+  fi
 fi
 
 launchd_configured() {
@@ -217,6 +225,7 @@ launchd_configured() {
   # moment the agent should restart so telemetry reports the new version. It
   # cannot cause the per-session restart churn PATH did.
   [ -f "$launchd_plist" ] &&
+    grep -Fq "<string>$agent_path</string>" "$launchd_plist" &&
     grep -q "<string>$auth_client_id</string>" "$launchd_plist" &&
     grep -q "<string>$auth_url</string>" "$launchd_plist" &&
     grep -q "<string>$auth_audience</string>" "$launchd_plist" &&
@@ -225,8 +234,13 @@ launchd_configured() {
     grep -q "<string>${MONK_PLUGIN_VERSION:-}</string>" "$launchd_plist"
 }
 
+background_process_configured() {
+  [ "$custom_agent_path" != "1" ] ||
+    { [ -f "$path_file" ] && [ "$(cat "$path_file" 2>/dev/null || true)" = "$agent_path" ]; }
+}
+
 if [ "${MONK_AGENT_SKIP_ENSURE:-0}" != "1" ]; then
-  if [ "$os" != "Darwin" ] && [ "$agent_updated" = "0" ] && is_running; then
+  if [ "$os" != "Darwin" ] && [ "$agent_updated" = "0" ] && background_process_configured && is_running; then
     register_antigravity_mcp
     emit_signin_nudge
     exit 0
@@ -316,6 +330,7 @@ start_with_background_process() {
   fi
   pid="$!"
   printf '%s\n' "$pid" >"$pid_file"
+  printf '%s\n' "$agent_path" >"$path_file"
 }
 
 case "$os" in
