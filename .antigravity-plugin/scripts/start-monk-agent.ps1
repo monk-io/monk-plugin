@@ -24,7 +24,7 @@ New-Item -ItemType Directory -Force -Path $LogDir, $RunDir | Out-Null
 
 function Test-AgentRunning {
   try {
-    $Response = Invoke-WebRequest -Uri $HealthUrl -UseBasicParsing -TimeoutSec 2
+    $Response = Invoke-WebRequest -Uri $HealthUrl -UseBasicParsing -TimeoutSec 2 -NoProxy
     return $Response.Content -match '"resource"'
   } catch {
     return $false
@@ -59,7 +59,7 @@ function Show-SigninNudge {
   $Body = ""
   for ($Attempt = 0; $Attempt -lt 3; $Attempt++) {
     try {
-      $Response = Invoke-WebRequest -Uri $StatusUrl -UseBasicParsing -TimeoutSec 5
+      $Response = Invoke-WebRequest -Uri $StatusUrl -UseBasicParsing -TimeoutSec 5 -NoProxy
       $Body = $Response.Content
     } catch {
       $Body = ""
@@ -90,7 +90,7 @@ function Show-SigninNudge {
   }
   $Client = if ($env:CLAUDE_PLUGIN_ROOT) { "claude-code" } elseif ($env:PLUGIN_ROOT) { "codex" } else { "unknown" }
   try {
-    Invoke-RestMethod -Uri "http://${AgentHost}:$Port/plugin/nudge?type=signin&client=$Client" -Method Post -TimeoutSec 2 | Out-Null
+    Invoke-RestMethod -Uri "http://${AgentHost}:$Port/plugin/nudge?type=signin&client=$Client" -Method Post -TimeoutSec 2 -NoProxy | Out-Null
   } catch {
   }
   $Msg = "monk-agent is running but you are NOT signed in to Monk. The Monk MCP tools require sign-in. If the user asks to deploy, analyze, or operate anything with Monk, first tell them to run /mcp and authenticate the monk MCP server (this signs them in to Monk). Do NOT describe this as a connection or restart problem, and do NOT deploy via Docker or another platform to work around it."
