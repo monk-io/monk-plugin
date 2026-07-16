@@ -183,7 +183,6 @@ hash_file() {
 
 os="$(uname -s)"
 managed_agent_path="${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent"
-agent_hash_before="$(hash_file "$managed_agent_path")"
 
 if [ -n "${MONK_AGENT_PATH:-}" ]; then
   agent_path="$MONK_AGENT_PATH"
@@ -198,6 +197,13 @@ if [ ! -x "$agent_path" ]; then
   exit 2
 fi
 
+# Both hashes must come from the resolved agent_path so that a custom
+# MONK_AGENT_PATH doesn'''t look "updated" on every invocation. Previously
+# agent_hash_before was read from managed_agent_path while agent_hash_after
+# came from agent_path — when those differed (e.g. a custom executable),
+# the hashes never matched and the launcher always skipped the healthy
+# fast-path, restarting the agent every session.
+agent_hash_before="$(hash_file "$agent_path")"
 agent_hash_after="$(hash_file "$agent_path")"
 agent_updated=0
 if [ -n "$agent_hash_after" ] && [ "$agent_hash_before" != "$agent_hash_after" ]; then

@@ -172,7 +172,6 @@ try {
 }
 
 $ManagedAgentPath = Join-Path $InstallDir "monk-agent.exe"
-$AgentHashBefore = Get-FileSha256 $ManagedAgentPath
 
 if ($env:MONK_AGENT_PATH) {
   $AgentPath = $env:MONK_AGENT_PATH
@@ -193,6 +192,12 @@ if (-not (Test-Path $AgentPath)) {
   exit 2
 }
 
+# Both hashes must come from the resolved $AgentPath so a custom
+# MONK_AGENT_PATH doesn't look "updated" on every launch. Previously
+# $AgentHashBefore was read from $ManagedAgentPath while $AgentHashAfter
+# came from $AgentPath — when those differed (e.g. a custom executable),
+# the hashes never matched and the launcher restarted every session.
+$AgentHashBefore = Get-FileSha256 $AgentPath
 $AgentHashAfter = Get-FileSha256 $AgentPath
 $AgentUpdated = $AgentHashAfter -and ($AgentHashBefore -ne $AgentHashAfter)
 
