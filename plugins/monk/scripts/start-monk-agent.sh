@@ -62,24 +62,37 @@ register_antigravity_mcp() {
     has_existing=1
   fi
   tmp="$(mktemp)"
-  if command -v jq >/dev/null 2>&1; then
-    if [ "$has_existing" = "1" ]; then
-      jq --arg u "$server_url" '.mcpServers.monk = {serverUrl: $u}' "$mcp_cfg" >"$tmp"
-    else
-      jq -n --arg u "$server_url" '{mcpServers: {monk: {serverUrl: $u}}}' >"$tmp"
+  if [ "$has_existing" = "1" ] && command -v jq >/dev/null 2>&1; then
+    # Validate the existing config before merging — a malformed file must not
+    # abort the launcher (set -e). If jq can't parse it, warn and fall back to
+    # manual instructions.
+    if ! jq empty "$mcp_cfg" 2>/dev/null; then
+      rm -f "$tmp"
+      echo "Warning: $mcp_cfg is not valid JSON — skipping auto-registration." >&2
+      echo "Fix the file or add monk manually:" >&2
+      printf '  {"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >&2
+      return 0
     fi
-  elif command -v python3 >/dev/null 2>&1; then
-    if [ "$has_existing" = "1" ]; then
-      python3 -c "
+    jq --arg u "$server_url" '.mcpServers.monk = {serverUrl: $u}' "$mcp_cfg" >"$tmp"
+  elif [ "$has_existing" = "0" ] && command -v jq >/dev/null 2>&1; then
+    jq -n --arg u "$server_url" '{mcpServers: {monk: {serverUrl: $u}}}' >"$tmp"
+  elif [ "$has_existing" = "1" ] && command -v python3 >/dev/null 2>&1; then
+    if ! python3 -c "import json; json.load(open('$mcp_cfg'))" 2>/dev/null; then
+      rm -f "$tmp"
+      echo "Warning: $mcp_cfg is not valid JSON — skipping auto-registration." >&2
+      echo "Fix the file or add monk manually:" >&2
+      printf '  {"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >&2
+      return 0
+    fi
+    python3 -c "
 import json, sys
 cfg = json.load(open('$mcp_cfg'))
 cfg.setdefault('mcpServers', {})['monk'] = {'serverUrl': '$server_url'}
 json.dump(cfg, sys.stdout, indent=2)
 print()
 " >"$tmp"
-    else
-      printf '{"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >"$tmp"
-    fi
+  elif [ "$has_existing" = "0" ] && command -v python3 >/dev/null 2>&1; then
+    printf '{"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >"$tmp"
   else
     rm -f "$tmp"
     echo "Add monk to $mcp_cfg to enable Antigravity MCP (jq or python3 required to auto-write):" >&2
