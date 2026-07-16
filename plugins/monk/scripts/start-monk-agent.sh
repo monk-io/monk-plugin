@@ -45,6 +45,13 @@ mkdir -p "$log_dir" "$run_dir"
 
 health_url="http://$host:$port/.well-known/oauth-protected-resource"
 
+# Requests to the local companion must never be sent through a user-configured
+# HTTP(S) or ALL_PROXY. A proxy cannot normally reach the loopback-only agent
+# and may return its own response, which makes the launcher misdiagnose a
+# healthy agent as unavailable. curl gets an explicit bypass; wget uses the
+# standard no_proxy variables.
+agent_no_proxy="$host,localhost"
+
 # Register monk in Antigravity's global MCP config if ~/.gemini/config/ exists.
 # Idempotent — skips if already registered. Uses jq when available; prints
 # manual instructions otherwise.
@@ -117,9 +124,9 @@ emit_signin_nudge() {
   attempt=0
   while [ "$attempt" -lt 3 ]; do
     if command -v curl >/dev/null 2>&1; then
-      body="$(curl -fsS --max-time 5 "$status_url" 2>/dev/null || true)"
+      body="$(curl --noproxy "$host" -fsS --max-time 5 "$status_url" 2>/dev/null || true)"
     elif command -v wget >/dev/null 2>&1; then
-      body="$(wget -q -T 5 -O - "$status_url" 2>/dev/null || true)"
+      body="$(NO_PROXY="$agent_no_proxy,${NO_PROXY:-}" no_proxy="$agent_no_proxy,${no_proxy:-}" wget -q -T 5 -O - "$status_url" 2>/dev/null || true)"
     fi
     [ -n "$body" ] && break
     attempt=$((attempt + 1))
@@ -139,9 +146,10 @@ emit_signin_nudge() {
   fi
   nudge_url="http://$host:$port/plugin/nudge?type=signin&client=$client"
   if command -v curl >/dev/null 2>&1; then
-    curl -fsS --max-time 2 -X POST "$nudge_url" >/dev/null 2>&1 || true
+    curl --noproxy "$host" -fsS --max-time 2 -X POST "$nudge_url" >/dev/null 2>&1 || true
   elif command -v wget >/dev/null 2>&1; then
-    wget -q -T 2 -O - --post-data="" "$nudge_url" >/dev/null 2>&1 || true
+    NO_PROXY="$agent_no_proxy,${NO_PROXY:-}" no_proxy="$agent_no_proxy,${no_proxy:-}" \
+      wget -q -T 2 -O - --post-data="" "$nudge_url" >/dev/null 2>&1 || true
   fi
   msg="monk-agent is running but you are NOT signed in to Monk. The Monk MCP tools require sign-in. If the user asks to deploy, analyze, or operate anything with Monk, first tell them to run /mcp and authenticate the monk MCP server (this signs them in to Monk). Do NOT describe this as a connection or restart problem, and do NOT deploy via Docker or another platform to work around it."
   if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && command -v jq >/dev/null 2>&1; then
@@ -154,11 +162,12 @@ emit_signin_nudge() {
 
 is_running() {
   if command -v curl >/dev/null 2>&1; then
-    curl -fsS --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
+    curl --noproxy "$host" -fsS --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
     return $?
   fi
   if command -v wget >/dev/null 2>&1; then
-    wget -q -T 2 -O - "$health_url" 2>/dev/null | grep -q '"resource"'
+    NO_PROXY="$agent_no_proxy,${NO_PROXY:-}" no_proxy="$agent_no_proxy,${no_proxy:-}" \
+      wget -q -T 2 -O - "$health_url" 2>/dev/null | grep -q '"resource"'
     return $?
   fi
   return 1
