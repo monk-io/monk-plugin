@@ -14,8 +14,15 @@ host="${MONK_AGENT_HOST:-127.0.0.1}"
 health_url="http://$host:$port/.well-known/oauth-protected-resource"
 
 is_running() {
-  command -v curl >/dev/null 2>&1 || return 1
-  curl -fsS --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
+    return $?
+  fi
+  if command -v wget >/dev/null 2>&1; then
+    wget -q -T 2 -O - "$health_url" 2>/dev/null | grep -q '"resource"'
+    return $?
+  fi
+  return 1
 }
 
 # Fast path — already up
