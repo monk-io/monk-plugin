@@ -259,8 +259,20 @@ start_with_launchd() {
   </array>
   <key>RunAtLoad</key>
   <true/>
+  <!-- Respawn on crashes/non-zero exits, but NOT on a clean exit 0. The agent
+       exits 0 when it finds another healthy monk-agent already on the port
+       (see handlePortConflict) so a lost bind race defers instead of hot-looping;
+       a foreign process holding the port exits non-zero and is retried, throttled. -->
   <key>KeepAlive</key>
-  <true/>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <!-- launchd's default throttle floor is 10s; widen it so an unrecoverable
+       failure (e.g. a foreign process pinning the port) costs ~1 relaunch/min
+       instead of ~6, while still self-healing once the port frees. -->
+  <key>ThrottleInterval</key>
+  <integer>60</integer>
   <key>EnvironmentVariables</key>
   <dict>
     <key>MONK_AUTH_URL</key>
