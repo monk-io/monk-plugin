@@ -40,12 +40,19 @@ checksum_tmp="$install_dir/.monk-agent.tmp.sha256"
 extract_dir="$install_dir/.monk-agent.extract"
 mkdir -p "$install_dir"
 
+has_nonempty_executable() {
+  [ -x "$1" ] && [ -s "$1" ]
+}
+
 if [ "$auto_update" = "0" ] || [ "$auto_update" = "false" ]; then
   if command -v monk-agent >/dev/null 2>&1; then
-    command -v monk-agent
-    exit 0
+    command_path="$(command -v monk-agent)"
+    if has_nonempty_executable "$command_path"; then
+      printf '%s\n' "$command_path"
+      exit 0
+    fi
   fi
-  if [ -x "$target" ]; then
+  if has_nonempty_executable "$target"; then
     printf '%s\n' "$target"
     exit 0
   fi
@@ -62,7 +69,7 @@ fi
 
 expected="$(awk '{print $1}' "$checksum_tmp")"
 
-if [ -x "$target" ] && [ -f "$checksum_installed" ]; then
+if has_nonempty_executable "$target" && [ -f "$checksum_installed" ]; then
   installed="$(awk '{print $1}' "$checksum_installed")"
   if [ "$installed" = "$expected" ]; then
     rm -f "$checksum_tmp"

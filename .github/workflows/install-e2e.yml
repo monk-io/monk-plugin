@@ -38,6 +38,62 @@ jobs:
           test "$installed" = "$MONK_AGENT_INSTALL_DIR/monk-agent"
           test -x "$installed"
 
+      - name: Verify zero-byte monk-agent is repaired
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          trap 'rm -rf "$root"' EXIT HUP INT TERM
+          install="$root/monk-bin"
+          fakebin="$root/fakebin"
+          stage="$root/stage"
+          archive="$root/monk-agent-linux-latest.tar.gz"
+          checksum="$install/monk-agent.sha256"
+          mkdir -p "$install" "$fakebin" "$stage"
+          : >"$install/monk-agent"
+          chmod 0755 "$install/monk-agent"
+
+          printf '#!/bin/sh\necho hello\n' >"$stage/monk-agent"
+          chmod 0755 "$stage/monk-agent"
+          tar -czf "$archive" -C "$stage" monk-agent
+          if command -v shasum >/dev/null 2>&1; then
+            expected="$(shasum -a 256 "$archive" | awk '{print $1}')"
+          else
+            expected="$(sha256sum "$archive" | awk '{print $1}')"
+          fi
+          printf '%s  monk-agent-linux-latest.tar.gz\n' "$expected" >"$checksum"
+
+          cat >"$fakebin/curl" <<'SH'
+          #!/bin/sh
+          set -eu
+          out=""
+          url=""
+          while [ "$#" -gt 0 ]; do
+            case "$1" in
+              -o) out="$2"; shift 2 ;;
+              -*) shift ;;
+              *) url="$1"; shift ;;
+            esac
+          done
+          printf '%s\n' "$url" >>"$CURL_LOG"
+          case "$url" in
+            *.sha256) cp "$CHECKSUM_FILE" "$out" ;;
+            *) cp "$ARCHIVE_FILE" "$out" ;;
+          esac
+          SH
+          chmod 0755 "$fakebin/curl"
+
+          installed="$(
+            CURL_LOG="$root/curl.log" CHECKSUM_FILE="$checksum" ARCHIVE_FILE="$archive" \
+              PATH="$fakebin:/usr/bin:/bin:/usr/sbin:/sbin" \
+              MONK_AGENT_INSTALL_DIR="$install" \
+              ./scripts/ensure-monk-agent.sh
+          )"
+          test "$installed" = "$install/monk-agent"
+          test -x "$installed"
+          test -s "$installed"
+          test "$(wc -l <"$root/curl.log" | tr -d ' ')" = "2"
+
       - name: Run monk-agent status
         shell: bash
         env:

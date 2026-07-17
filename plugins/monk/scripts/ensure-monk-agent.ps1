@@ -38,6 +38,12 @@ function Get-FileSha256 {
   return ([System.BitConverter]::ToString($Hash) -replace "-", "").ToLowerInvariant()
 }
 
+function Test-NonEmptyFile {
+  param([string]$Path)
+
+  return (Test-Path $Path -PathType Leaf) -and ((Get-Item $Path).Length -gt 0)
+}
+
 function Stop-ManagedAgent {
   if (-not (Test-Path $PidFile)) {
     return
@@ -75,12 +81,12 @@ function Stop-ManagedAgent {
 
 if ($AutoUpdate -eq "0" -or $AutoUpdate -eq "false") {
   $Existing = Get-Command monk-agent.exe -ErrorAction SilentlyContinue
-  if ($Existing) {
+  if ($Existing -and $Existing.Source -and (Test-NonEmptyFile $Existing.Source)) {
     Write-Output $Existing.Source
     exit 0
   }
 
-  if (Test-Path $Target) {
+  if (Test-NonEmptyFile $Target) {
     Write-Output $Target
     exit 0
   }
@@ -106,7 +112,7 @@ Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumTmp
 
 $Expected = ((Get-Content -Raw $ChecksumTmp).Trim() -split "\s+")[0].ToLowerInvariant()
 
-if ((Test-Path $Target) -and (Test-Path $ChecksumInstalled)) {
+if ((Test-NonEmptyFile $Target) -and (Test-Path $ChecksumInstalled -PathType Leaf)) {
   $Installed = ((Get-Content -Raw $ChecksumInstalled).Trim() -split "\s+")[0].ToLowerInvariant()
   if ($Installed -eq $Expected) {
     Remove-Item -Force $ChecksumTmp
