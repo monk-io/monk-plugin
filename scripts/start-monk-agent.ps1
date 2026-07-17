@@ -194,7 +194,15 @@ if (-not (Test-Path $AgentPath)) {
 }
 
 $AgentHashAfter = Get-FileSha256 $AgentPath
-$AgentUpdated = $AgentHashAfter -and ($AgentHashBefore -ne $AgentHashAfter)
+# When using a custom MONK_AGENT_PATH, skip the managed-agent hash comparison
+# entirely. $AgentHashBefore is the managed path hash which is empty when the
+# managed agent is absent, causing a false "updated" result. Trust the health
+# check (Test-AgentRunning) instead.
+if ($env:MONK_AGENT_PATH) {
+  $AgentUpdated = $false
+} else {
+  $AgentUpdated = $AgentHashAfter -and ($AgentHashBefore -ne $AgentHashAfter)
+}
 
 if (-not $AgentUpdated -and (Test-AgentRunning)) {
   Show-SigninNudge
