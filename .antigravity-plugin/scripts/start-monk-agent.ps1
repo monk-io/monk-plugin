@@ -18,7 +18,13 @@ $RunDir = Join-Path $DataDir "run"
 $LogOut = Join-Path $LogDir "monk-agent.out.log"
 $LogErr = Join-Path $LogDir "monk-agent.err.log"
 $PidFile = Join-Path $RunDir "monk-agent.pid"
-$HealthUrl = "http://${AgentHost}:$Port/.well-known/oauth-protected-resource"
+$UrlHost = if ($AgentHost.Contains(":") -and -not ($AgentHost.StartsWith("[") -and $AgentHost.EndsWith("]"))) {
+  "[$AgentHost]"
+} else {
+  $AgentHost
+}
+$BaseUrl = "http://${UrlHost}:$Port"
+$HealthUrl = "$BaseUrl/.well-known/oauth-protected-resource"
 
 New-Item -ItemType Directory -Force -Path $LogDir, $RunDir | Out-Null
 
@@ -46,7 +52,7 @@ function Show-SigninNudge {
   # /status.json, which runs ~10 synchronous install probes (~2s/call and
   # serializes under concurrent dashboard/MCP load) — that latency made this
   # check racy against a cold, signed-out agent.
-  $StatusUrl = "http://${AgentHost}:$Port/auth.json"
+  $StatusUrl = "$BaseUrl/auth.json"
   # A just-(re)started agent can still report a transient MISS on the first probe
   # (connection refused during the restart window, or a 500 from a cold DPAPI
   # read the agent itself retries then surfaces as an error rather than a false
@@ -90,7 +96,7 @@ function Show-SigninNudge {
   }
   $Client = if ($env:CLAUDE_PLUGIN_ROOT) { "claude-code" } elseif ($env:PLUGIN_ROOT) { "codex" } else { "unknown" }
   try {
-    Invoke-RestMethod -Uri "http://${AgentHost}:$Port/plugin/nudge?type=signin&client=$Client" -Method Post -TimeoutSec 2 | Out-Null
+    Invoke-RestMethod -Uri "$BaseUrl/plugin/nudge?type=signin&client=$Client" -Method Post -TimeoutSec 2 | Out-Null
   } catch {
   }
   $Msg = "monk-agent is running but you are NOT signed in to Monk. The Monk MCP tools require sign-in. If the user asks to deploy, analyze, or operate anything with Monk, first tell them to run /mcp and authenticate the monk MCP server (this signs them in to Monk). Do NOT describe this as a connection or restart problem, and do NOT deploy via Docker or another platform to work around it."
