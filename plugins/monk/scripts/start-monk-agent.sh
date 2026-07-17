@@ -44,6 +44,19 @@ launchd_plist="$HOME/Library/LaunchAgents/$launchd_label.plist"
 mkdir -p "$log_dir" "$run_dir"
 
 health_url="http://$host:$port/.well-known/oauth-protected-resource"
+loopback_no_proxy="$host,localhost,127.0.0.1,::1"
+
+local_curl() {
+  NO_PROXY="${NO_PROXY:+$NO_PROXY,}$loopback_no_proxy" \
+  no_proxy="${no_proxy:+$no_proxy,}$loopback_no_proxy" \
+    curl --noproxy "$loopback_no_proxy" "$@"
+}
+
+local_wget() {
+  NO_PROXY="${NO_PROXY:+$NO_PROXY,}$loopback_no_proxy" \
+  no_proxy="${no_proxy:+$no_proxy,}$loopback_no_proxy" \
+    wget "$@"
+}
 
 # Register monk in Antigravity's global MCP config if ~/.gemini/config/ exists.
 # Idempotent — skips if already registered. Uses jq when available; prints
@@ -117,9 +130,9 @@ emit_signin_nudge() {
   attempt=0
   while [ "$attempt" -lt 3 ]; do
     if command -v curl >/dev/null 2>&1; then
-      body="$(curl -fsS --max-time 5 "$status_url" 2>/dev/null || true)"
+      body="$(local_curl -fsS --max-time 5 "$status_url" 2>/dev/null || true)"
     elif command -v wget >/dev/null 2>&1; then
-      body="$(wget -q -T 5 -O - "$status_url" 2>/dev/null || true)"
+      body="$(local_wget -q -T 5 -O - "$status_url" 2>/dev/null || true)"
     fi
     [ -n "$body" ] && break
     attempt=$((attempt + 1))
@@ -139,9 +152,9 @@ emit_signin_nudge() {
   fi
   nudge_url="http://$host:$port/plugin/nudge?type=signin&client=$client"
   if command -v curl >/dev/null 2>&1; then
-    curl -fsS --max-time 2 -X POST "$nudge_url" >/dev/null 2>&1 || true
+    local_curl -fsS --max-time 2 -X POST "$nudge_url" >/dev/null 2>&1 || true
   elif command -v wget >/dev/null 2>&1; then
-    wget -q -T 2 -O - --post-data="" "$nudge_url" >/dev/null 2>&1 || true
+    local_wget -q -T 2 -O - --post-data="" "$nudge_url" >/dev/null 2>&1 || true
   fi
   msg="monk-agent is running but you are NOT signed in to Monk. The Monk MCP tools require sign-in. If the user asks to deploy, analyze, or operate anything with Monk, first tell them to run /mcp and authenticate the monk MCP server (this signs them in to Monk). Do NOT describe this as a connection or restart problem, and do NOT deploy via Docker or another platform to work around it."
   if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && command -v jq >/dev/null 2>&1; then
@@ -154,11 +167,11 @@ emit_signin_nudge() {
 
 is_running() {
   if command -v curl >/dev/null 2>&1; then
-    curl -fsS --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
+    local_curl -fsS --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
     return $?
   fi
   if command -v wget >/dev/null 2>&1; then
-    wget -q -T 2 -O - "$health_url" 2>/dev/null | grep -q '"resource"'
+    local_wget -q -T 2 -O - "$health_url" 2>/dev/null | grep -q '"resource"'
     return $?
   fi
   return 1
