@@ -330,6 +330,15 @@ while [ "$tries" -lt 180 ]; do
     emit_signin_nudge
     exit 0
   fi
+  # Fail fast: if the companion process exited, stop waiting immediately.
+  if [ -f "$pid_file" ]; then
+    pid="$(cat "$pid_file" 2>/dev/null || true)"
+    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+      echo "monk-agent process $pid exited before becoming ready." >&2
+      echo "Log: $log_file" >&2
+      exit 1
+    fi
+  fi
   tries=$((tries + 1))
   sleep 1
 done
