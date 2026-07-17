@@ -16,6 +16,15 @@ script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 # agent-binary version).
 [ -f "$script_dir/plugin-version.sh" ] && . "$script_dir/plugin-version.sh"
 
+# Bracket IPv6 literals for valid URL construction (e.g. ::1 -> [::1]).
+# IPv4 addresses and hostnames pass through unchanged.
+bracket_host() {
+  case "$1" in
+    *:*) printf '[%s]' "$1" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
 case "$(uname -s 2>/dev/null || printf unknown)" in
   MINGW*|MSYS*|CYGWIN*)
     exec powershell.exe -NoProfile -ExecutionPolicy Bypass \
@@ -43,7 +52,7 @@ launchd_plist="$HOME/Library/LaunchAgents/$launchd_label.plist"
 
 mkdir -p "$log_dir" "$run_dir"
 
-health_url="http://$host:$port/.well-known/oauth-protected-resource"
+health_url="http://$(bracket_host "$host"):$port/.well-known/oauth-protected-resource"
 
 # Register monk in Antigravity's global MCP config if ~/.gemini/config/ exists.
 # Idempotent — skips if already registered. Uses jq when available; prints
@@ -52,7 +61,7 @@ register_antigravity_mcp() {
   gemini_cfg="$HOME/.gemini/config"
   [ -d "$gemini_cfg" ] || return 0
   mcp_cfg="$gemini_cfg/mcp_config.json"
-  server_url="http://$host:$port/mcp"
+  server_url="http://$(bracket_host "$host"):$port/mcp"
   if [ -f "$mcp_cfg" ] && grep -q '"monk"' "$mcp_cfg" 2>/dev/null; then
     return 0
   fi
@@ -72,11 +81,11 @@ register_antigravity_mcp() {
     if [ "$has_existing" = "1" ]; then
       python3 -c "
 import json, sys
-cfg = json.load(open('$mcp_cfg'))
-cfg.setdefault('mcpServers', {})['monk'] = {'serverUrl': '$server_url'}
+cfg = json.load(open(sys.argv[1]))
+cfg.setdefault('mcpServers', {})['monk'] = {'serverUrl': sys.argv[2]}
 json.dump(cfg, sys.stdout, indent=2)
 print()
-" >"$tmp"
+" "$mcp_cfg" "$server_url" >"$tmp"
     else
       printf '{"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >"$tmp"
     fi
@@ -103,7 +112,7 @@ emit_signin_nudge() {
   # /status.json, which runs ~10 synchronous install probes (~2s/call and
   # serializes under concurrent dashboard/MCP load) — that latency pushed this
   # check past the curl timeout and made the nudge racy.
-  status_url="http://$host:$port/auth.json"
+  status_url="http://$(bracket_host "$host"):$port/auth.json"
   body=""
   # A just-(re)started agent can still report a transient MISS on the first probe
   # (connection refused during the restart window, or a 500 from a cold macOS
@@ -137,7 +146,7 @@ emit_signin_nudge() {
   elif [ -n "${PLUGIN_ROOT:-}" ]; then
     client="codex"
   fi
-  nudge_url="http://$host:$port/plugin/nudge?type=signin&client=$client"
+  nudge_url="http://$(bracket_host "$host"):$port/plugin/nudge?type=signin&client=$client"
   if command -v curl >/dev/null 2>&1; then
     curl -fsS --max-time 2 -X POST "$nudge_url" >/dev/null 2>&1 || true
   elif command -v wget >/dev/null 2>&1; then
