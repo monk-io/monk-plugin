@@ -18,6 +18,23 @@ is_running() {
   curl -fsS --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
 }
 
+emit_inject_steps() {
+  msg="$1"
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$msg" <<'PY'
+import json
+import sys
+
+print(json.dumps({"injectSteps": [{"ephemeralMessage": sys.argv[1]}]}))
+PY
+    return 0
+  fi
+
+  # Best-effort fallback for minimal shells: the messages we emit are static and
+  # contain no characters that need escaping beyond JSON string delimiters.
+  printf '%s\n' "{\"injectSteps\":[{\"ephemeralMessage\":\"$msg\"}]}"
+}
+
 # Fast path — already up
 if is_running; then
   printf '%s\n' "{}"
@@ -28,12 +45,7 @@ fi
 agent_path="${MONK_AGENT_PATH:-${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent}"
 
 if [ ! -x "$agent_path" ]; then
-  plugin_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-  jq -n --arg script "$plugin_dir/scripts/start-monk-agent.sh" '{
-    injectSteps: [{
-      ephemeralMessage: ("monk-agent is not installed. Run `" + $script + "` once to install and start it, then continue.")
-    }]
-  }'
+  emit_inject_steps "monk-agent is not installed. Run the bundled start script once to install and start it, then continue."
   exit 0
 fi
 
@@ -55,8 +67,4 @@ else
   "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &
 fi
 
-jq -n '{
-  injectSteps: [{
-    ephemeralMessage: "monk-agent was not running and has been started. It may take a few seconds to initialize — use monk.install.status or monk.runtime.status to check readiness before issuing Monk operations."
-  }]
-}'
+emit_inject_steps "monk-agent was not running and has been started. It may take a few seconds to initialize — use monk.install.status or monk.runtime.status to check readiness before issuing Monk operations."

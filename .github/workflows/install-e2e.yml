@@ -38,6 +38,62 @@ jobs:
           test "$installed" = "$MONK_AGENT_INSTALL_DIR/monk-agent"
           test -x "$installed"
 
+      - name: Verify ensure-monk-agent.sh works without jq
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          trap 'rm -rf "$root"' EXIT HUP INT TERM
+          fakebin="$root/fakebin"
+          mkdir -p "$fakebin"
+
+          cat >"$fakebin/curl" <<'SH'
+          #!/bin/sh
+          set -eu
+          exit 0
+          SH
+          chmod 0755 "$fakebin/curl"
+
+          cat >"$fakebin/dirname" <<'SH'
+          #!/bin/sh
+          exec /usr/bin/dirname "$@"
+          SH
+          chmod 0755 "$fakebin/dirname"
+
+          cat >"$fakebin/jq" <<'SH'
+          #!/bin/sh
+          printf '%s\n' "jq_called:$*" >>"$JQ_LOG"
+          exit 127
+          SH
+          chmod 0755 "$fakebin/jq"
+
+          jq_log="$root/jq.log"
+          : >"$jq_log"
+
+          set +e
+          output="$(
+            cd .antigravity-plugin &&
+            JQ_LOG="$jq_log" \
+            PATH="$fakebin:/usr/bin:/bin" \
+            MONK_AGENT_PATH="$root/missing/monk-agent" \
+            ./hooks/ensure-monk-agent.sh
+          )"
+          status=$?
+          set -e
+
+          test "$status" -eq 0
+          test ! -s "$jq_log"
+          python3 - "$output" <<'PY'
+          import json
+          import sys
+
+          payload = json.loads(sys.argv[1])
+          assert "injectSteps" in payload, payload
+          assert payload["injectSteps"], payload
+          assert "ephemeralMessage" in payload["injectSteps"][0], payload
+          assert "not installed" in payload["injectSteps"][0]["ephemeralMessage"], payload
+          PY
+
       - name: Verify zero-byte monk-agent is repaired
         shell: bash
         run: |
