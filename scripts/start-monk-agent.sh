@@ -73,7 +73,9 @@ register_antigravity_mcp() {
       python3 -c "
 import json, sys
 cfg = json.load(open('$mcp_cfg'))
-cfg.setdefault('mcpServers', {})['monk'] = {'serverUrl': '$server_url'}
+if not isinstance(cfg.get('mcpServers'), dict):
+    cfg['mcpServers'] = {}
+cfg['mcpServers']['monk'] = {'serverUrl': '$server_url'}
 json.dump(cfg, sys.stdout, indent=2)
 print()
 " >"$tmp"
