@@ -119,6 +119,11 @@ during the bounty every valid report earns points toward the
 One bug per issue. Duplicates are merged into the first report. Feature
 requests and content about your run (blog, stream, tweet) earn points too —
 open a regular issue with the details or the link.
+
+To be scored you need a Monk account — sign in at [monk.io](https://monk.io)
+with the same GitHub account you file from — and findings should come from
+actually using the product. Reports without a linked account, and findings
+from pure code analysis, are welcome but won't earn points.
 **Security and data-loss findings go to security@monk.io** — please don't
 post exploitable details publicly.
 

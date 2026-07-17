@@ -9,6 +9,21 @@ body:
       value: |
         Thanks for hunting bugs! **Security and data-loss findings go to
         security@monk.io** — please don't file those here.
+
+        To earn points in the bounty you need a Monk account — sign in at
+        [monk.io](https://monk.io) with the **same GitHub account** you file
+        from — and your finding should come from actually using the product.
+        Reports without a linked account, and findings from pure code
+        analysis, are still welcome, but they won't be scored.
+  - type: checkboxes
+    id: eligibility
+    attributes:
+      label: Bounty eligibility
+      options:
+        - label: I have signed up at monk.io with this GitHub account
+          required: false
+        - label: I have used the product (installed the plugin and ran it, rather than only reading the code)
+          required: false
   - type: dropdown
     id: stage
     attributes:

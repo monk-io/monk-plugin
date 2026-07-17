@@ -65,7 +65,7 @@ Before deploying:
    - you need to override the picked root with a specific absolute path, or
    - you want to record host/client/plugin-version metadata for telemetry.
      When you do call it, pass the absolute project directory as `workspaceRoot`
-     and include `pluginVersion: "0.1.43"` so telemetry reports the
+     and include `pluginVersion: "0.1.44"` so telemetry reports the
      real plugin version.
      `monk-agent` never falls back to its own working directory.
 4. Confirm auth status with `monk.auth.status` (once the tools are available). If

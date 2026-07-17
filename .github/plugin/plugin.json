@@ -1,6 +1,6 @@
 {
   "name": "monk",
-  "version": "0.1.43",
+  "version": "0.1.44",
   "description": "Deploy and operate full applications with Monk — cloud infra, SaaS integrations, and containerized workloads — from one chat.",
   "author": {
     "name": "MonkOS Inc",
