@@ -145,10 +145,48 @@ remove_runtime() {
   esac
 }
 
+remove_antigravity_mcp() {
+  gemini_cfg="$HOME/.gemini/config"
+  mcp_cfg="$gemini_cfg/mcp_config.json"
+  [ -f "$mcp_cfg" ] || return 0
+  grep -q '"monk"' "$mcp_cfg" 2>/dev/null || return 0
+  if command -v jq >/dev/null 2>&1; then
+    tmp="$(mktemp)"
+    jq 'del(.mcpServers.monk) | if .mcpServers == {} then del(.mcpServers) else . end' "$mcp_cfg" >"$tmp"
+    if [ -s "$tmp" ]; then
+      mv "$tmp" "$mcp_cfg"
+    else
+      rm -f "$tmp" "$mcp_cfg"
+    fi
+    echo "Removed monk MCP registration from $mcp_cfg" >&2
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c "
+import json, sys
+p = sys.argv[1]
+cfg = json.load(open(p))
+cfg.get('mcpServers', {}).pop('monk', None)
+if not cfg.get('mcpServers'):
+    cfg.pop('mcpServers', None)
+json.dump(cfg, sys.stdout, indent=2)
+print()
+" "$mcp_cfg" >"${mcp_cfg}.tmp"
+    if [ -s "${mcp_cfg}.tmp" ]; then
+      mv "${mcp_cfg}.tmp" "$mcp_cfg"
+    else
+      rm -f "${mcp_cfg}.tmp" "$mcp_cfg"
+    fi
+    echo "Removed monk MCP registration from $mcp_cfg" >&2
+  else
+    echo "Remove the monk entry from $mcp_cfg manually (jq or python3 not available)." >&2
+  fi
+}
+
 stop_agent
 remove_agent_files
 if [ "$remove_runtime" = "1" ]; then
   remove_runtime
 fi
+
+remove_antigravity_mcp
 
 echo "monk-agent uninstall complete."
