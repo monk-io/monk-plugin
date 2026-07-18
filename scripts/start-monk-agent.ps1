@@ -172,13 +172,19 @@ try {
 }
 
 $ManagedAgentPath = Join-Path $InstallDir "monk-agent.exe"
-$AgentHashBefore = Get-FileSha256 $ManagedAgentPath
 
 if ($env:MONK_AGENT_PATH) {
   $AgentPath = $env:MONK_AGENT_PATH
+  # When a custom path is set, hash that file for both before and after
+  # so AgentUpdated stays false (the managed path may not even exist).
+  $AgentHashBefore = Get-FileSha256 $AgentPath
 } elseif ($env:MONK_AGENT_SKIP_ENSURE -eq "1") {
   $AgentPath = $ManagedAgentPath
+  $AgentHashBefore = Get-FileSha256 $ManagedAgentPath
 } else {
+  # Hash the managed binary BEFORE ensure may replace it, then compare
+  # against the resolved path AFTER ensure to detect real updates.
+  $AgentHashBefore = Get-FileSha256 $ManagedAgentPath
   $EnsureScript = Join-Path $PluginRoot "scripts\ensure-monk-agent.ps1"
   if (-not (Test-Path $EnsureScript)) {
     Write-Error "monk-agent installer not found at $EnsureScript"

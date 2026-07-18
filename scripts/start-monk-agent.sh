@@ -183,13 +183,19 @@ hash_file() {
 
 os="$(uname -s)"
 managed_agent_path="${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent"
-agent_hash_before="$(hash_file "$managed_agent_path")"
 
 if [ -n "${MONK_AGENT_PATH:-}" ]; then
   agent_path="$MONK_AGENT_PATH"
+  # When a custom path is set, hash that file for both before and after
+  # so agent_updated stays 0 (the managed path may not even exist).
+  agent_hash_before="$(hash_file "$agent_path")"
 elif [ "${MONK_AGENT_SKIP_ENSURE:-0}" = "1" ]; then
   agent_path="$managed_agent_path"
+  agent_hash_before="$(hash_file "$managed_agent_path")"
 else
+  # Hash the managed binary BEFORE ensure may replace it, then compare
+  # against the resolved path AFTER ensure to detect real updates.
+  agent_hash_before="$(hash_file "$managed_agent_path")"
   agent_path="$("$plugin_root/scripts/ensure-monk-agent.sh")"
 fi
 
