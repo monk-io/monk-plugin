@@ -35,10 +35,27 @@ esac
 
 url="$download_base/$platform_path/$artifact"
 checksum_url="$url.sha256"
-archive_tmp="$install_dir/.monk-agent.tmp.tar.gz"
-checksum_tmp="$install_dir/.monk-agent.tmp.sha256"
-extract_dir="$install_dir/.monk-agent.extract"
+archive_tmp="$install_dir/.monk-agent.tmp.$$.tar.gz"
+checksum_tmp="$install_dir/.monk-agent.tmp.$$.sha256"
+extract_dir="$install_dir/.monk-agent.extract.$$"
+lock_file="$install_dir/.monk-agent.lock"
 mkdir -p "$install_dir"
+
+cleanup() {
+  rm -rf "$extract_dir" "$archive_tmp" "$checksum_tmp"
+}
+trap cleanup EXIT
+
+# Acquire exclusive lock to prevent concurrent installs.
+# flock is available on Linux and recent macOS; skip locking if absent.
+lock_fd=3
+if command -v flock >/dev/null 2>&1; then
+  exec 3>"$lock_file"
+  if ! flock -n 3; then
+    echo "Another monk-agent install is running; waiting..." >&2
+    flock 3
+  fi
+fi
 
 if [ "$auto_update" = "0" ] || [ "$auto_update" = "false" ]; then
   if command -v monk-agent >/dev/null 2>&1; then
@@ -98,5 +115,6 @@ tar -xzf "$archive_tmp" -C "$extract_dir"
 chmod 0755 "$extract_dir/monk-agent"
 mv "$extract_dir/monk-agent" "$target"
 printf '%s  %s\n' "$expected" "$artifact" >"$checksum_installed"
-rm -rf "$extract_dir" "$archive_tmp" "$checksum_tmp"
+rm -f "$archive_tmp" "$checksum_tmp"
+# extract_dir cleaned by trap
 printf '%s\n' "$target"
