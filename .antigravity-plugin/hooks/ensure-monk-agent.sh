@@ -13,9 +13,30 @@ port="${MONK_AGENT_PORT:-7419}"
 host="${MONK_AGENT_HOST:-127.0.0.1}"
 health_url="http://$host:$port/.well-known/oauth-protected-resource"
 
+# Output helper: use jq if available, fall back to printf
+emit_json() {
+  if command -v jq >/dev/null 2>&1; then
+    jq -n "$@"
+  else
+    # Minimal JSON emitter for the two known shapes
+    case "$1" in
+      not_installed)
+        script="$2"
+        printf '{"injectSteps":[{"ephemeralMessage":"monk-agent is not installed. Run `%s` once to install and start it, then continue."}]}\n' "$script"
+        ;;
+      started)
+        printf '{"injectSteps":[{"ephemeralMessage":"monk-agent was not running and has been started. It may take a few seconds to initialize — use monk.install.status or monk.runtime.status to check readiness before issuing Monk operations."}]}\n'
+        ;;
+      *)
+        printf '{}\n'
+        ;;
+    esac
+  fi
+}
+
 is_running() {
   command -v curl >/dev/null 2>&1 || return 1
-  curl -fsS --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
+  curl -fsS --max-time 2 "$health_url" 2>/dev/null | rtk grep -q '"resource"'
 }
 
 # Fast path — already up
@@ -29,11 +50,7 @@ agent_path="${MONK_AGENT_PATH:-${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk
 
 if [ ! -x "$agent_path" ]; then
   plugin_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-  jq -n --arg script "$plugin_dir/scripts/start-monk-agent.sh" '{
-    injectSteps: [{
-      ephemeralMessage: ("monk-agent is not installed. Run `" + $script + "` once to install and start it, then continue.")
-    }]
-  }'
+  emit_json not_installed "$plugin_dir/scripts/start-monk-agent.sh"
   exit 0
 fi
 
@@ -55,8 +72,4 @@ else
   "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &
 fi
 
-jq -n '{
-  injectSteps: [{
-    ephemeralMessage: "monk-agent was not running and has been started. It may take a few seconds to initialize — use monk.install.status or monk.runtime.status to check readiness before issuing Monk operations."
-  }]
-}'
+emit_json started
