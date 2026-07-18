@@ -134,7 +134,13 @@ function Stop-ManagedAgent {
     return
   }
 
-  $OldProcess = Get-Process -Id ([int]$RawPid) -ErrorAction SilentlyContinue
+  $ParsedPid = 0
+  if (-not [int32]::TryParse($RawPid, [ref]$ParsedPid) -or $ParsedPid -le 0) {
+    Remove-Item -Force $PidFile -ErrorAction SilentlyContinue
+    return
+  }
+
+  $OldProcess = Get-Process -Id $ParsedPid -ErrorAction SilentlyContinue
   if (-not $OldProcess) {
     return
   }

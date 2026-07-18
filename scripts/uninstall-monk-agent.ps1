@@ -49,7 +49,13 @@ function Stop-ManagedAgent {
     return
   }
 
-  $process = Get-Process -Id ([int]$raw) -ErrorAction SilentlyContinue
+  $parsedPid = 0
+  if (-not [int32]::TryParse($raw, [ref]$parsedPid) -or $parsedPid -le 0) {
+    Remove-Item -Force $PidFile -ErrorAction SilentlyContinue
+    return
+  }
+
+  $process = Get-Process -Id $parsedPid -ErrorAction SilentlyContinue
   if ($process) {
     try {
       $name = [IO.Path]::GetFileName($process.Path)
