@@ -7,6 +7,15 @@ $AuthClientId = if ($env:MONK_AGENT_AUTH_CLIENT_ID) { $env:MONK_AGENT_AUTH_CLIEN
 $AuthAudience = if ($env:MONK_AUTH_AUDIENCE) { $env:MONK_AUTH_AUDIENCE } else { "oaknode.com" }
 $AutospinUrl = if ($env:MONK_AUTOSPIN_URL) { $env:MONK_AUTOSPIN_URL } else { "wss://api.app.monk.io/autospin/" }
 
+# Host hooks terminate this launcher after 180 seconds. Reserve enough time for
+# this script to emit its own startup diagnostics instead of being killed first.
+$ReadyTimeoutSec = 150
+$RequestedReadyTimeout = 0
+if ($env:MONK_AGENT_READY_TIMEOUT -and
+    [int]::TryParse($env:MONK_AGENT_READY_TIMEOUT, [ref]$RequestedReadyTimeout)) {
+  $ReadyTimeoutSec = [Math]::Max(1, [Math]::Min(150, $RequestedReadyTimeout))
+}
+
 $ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 $PluginRoot = if ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { Split-Path -Parent $ScriptDir }
 $InstallDir = if ($env:MONK_AGENT_INSTALL_DIR) { $env:MONK_AGENT_INSTALL_DIR } else { Join-Path $HOME ".monk\bin" }
@@ -271,7 +280,8 @@ $Process = Start-Process `
 
 $Process.Id | Set-Content -NoNewline $PidFile
 
-for ($Attempt = 0; $Attempt -lt 180; $Attempt++) {
+$ReadyTimer = [System.Diagnostics.Stopwatch]::StartNew()
+while ($ReadyTimer.Elapsed.TotalSeconds -lt $ReadyTimeoutSec) {
   if (Test-AgentRunning) {
     Show-SigninNudge
     exit 0
@@ -279,8 +289,11 @@ for ($Attempt = 0; $Attempt -lt 180; $Attempt++) {
   if ($Process.HasExited) {
     break
   }
+  if ($ReadyTimer.Elapsed.TotalSeconds -ge $ReadyTimeoutSec) {
+    break
+  }
   Start-Sleep -Seconds 1
 }
 
-Write-Error "monk-agent did not become ready at $HealthUrl within 180s. Logs: $LogOut, $LogErr"
+Write-Error "monk-agent did not become ready at $HealthUrl within ${ReadyTimeoutSec}s. Logs: $LogOut, $LogErr"
 exit 1

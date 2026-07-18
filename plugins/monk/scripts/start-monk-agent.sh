@@ -10,6 +10,18 @@ autospin_url="${MONK_AUTOSPIN_URL:-wss://api.app.monk.io/autospin/}"
 agent_path_env="${PATH:-/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}"
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 
+# Host hooks terminate this launcher after 180 seconds. Keep readiness work
+# below that deadline so startup failures can print their own diagnostics.
+ready_timeout="${MONK_AGENT_READY_TIMEOUT:-150}"
+case "$ready_timeout" in
+  ''|*[!0-9]*) ready_timeout=150 ;;
+esac
+if [ "$ready_timeout" -lt 1 ]; then
+  ready_timeout=1
+elif [ "$ready_timeout" -gt 150 ]; then
+  ready_timeout=150
+fi
+
 # Rendered at plugin build time; carries MONK_PLUGIN_VERSION so the agent can
 # report the real plugin version in telemetry. Guarded: an older rendered
 # plugin without the file must still launch (the agent falls back to a labeled
@@ -368,24 +380,25 @@ case "$os" in
   *) start_with_background_process ;;
 esac
 
-tries=0
-while [ "$tries" -lt 180 ]; do
+ready_deadline=$(( $(date +%s) + ready_timeout ))
+while [ "$(date +%s)" -lt "$ready_deadline" ]; do
   if is_running; then
     register_antigravity_mcp
     emit_signin_nudge
     exit 0
   fi
-  # Break early if the background process has exited -- no point waiting 180s.
+  # Break early if the background process has exited -- no point waiting for
+  # the readiness deadline.
   if [ -f "$pid_file" ]; then
     _pid="$(cat "$pid_file" 2>/dev/null || true)"
     if [ -n "$_pid" ] && ! kill -0 "$_pid" 2>/dev/null; then
       break
     fi
   fi
-  tries=$((tries + 1))
+  [ "$(date +%s)" -lt "$ready_deadline" ] || break
   sleep 1
 done
 
-echo "monk-agent did not become ready at $health_url within 180s." >&2
+echo "monk-agent did not become ready at $health_url within ${ready_timeout}s." >&2
 echo "Log: $log_file" >&2
 exit 1
