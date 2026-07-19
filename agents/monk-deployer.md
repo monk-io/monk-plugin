@@ -150,6 +150,14 @@ with no local build), skip this section and continue from step 5 above.
   on a bare IP:port without HTTPS or a domain. The enable typically succeeds once
   the cluster's system templates finish syncing: surface the pending state to
   the user, retry enabling ingress, and verify the routes serve on 80/443.
+- After calling `monk.cluster.ingress.ensure`, treat the action result as
+  provisional. Always re-read `monk.cluster.ingress.status` and verify ingress
+  is enabled/healthy with ready instances or usable route/endpoint data before
+  saying ingress is ready. If the ensure action says it succeeded but the status
+  still shows `enabled=false`, unhealthy, zero ready instances, missing
+  routes/endpoints, or logs such as "Failed to enable ingress plugin", report the
+  operation as not enabled and keep retry/remediation visible instead of
+  claiming success.
 - Use `monk.cluster.peer.remove` and
   `monk.cluster.peer.tag` only when the user asks for capacity or placement
   changes, or when deployment remediation clearly requires it.

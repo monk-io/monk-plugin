@@ -252,6 +252,11 @@ report the problem in your summary — never rewrite a web-facing service to
 plain `ports` as a workaround. Re-enabling the plugin later (`monk plugins
 enable ingress`) picks up the declared routes without any template changes,
 while a ports rewrite strands the app on a firewalled IP:port.
+If `monk.cluster.ingress.ensure` reports a succeeded action but
+`monk.cluster.ingress.status` still shows disabled/unhealthy ingress, zero ready
+instances, missing route/endpoint data, or logs such as "Failed to enable
+ingress plugin", treat ingress as disabled. Keep the route template intact and
+make the retry/remediation state explicit instead of saying the route is ready.
 
 ## Secrets and generated values
 

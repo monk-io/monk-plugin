@@ -52,6 +52,13 @@ automatically selects the created cluster on success. Use
 `monk://workspace/clusters` or `monk.cluster.list` to inspect saved clusters,
 `monk.cluster.switch` to select one logically, and `monk.cluster.exit` to clear
 selection and return to local mode without deleting infrastructure.
+When enabling ingress, do not treat `monk.cluster.ingress.ensure` or its
+terminal action status as proof that ingress is enabled. After the action
+finishes, call `monk.cluster.ingress.status` and require enabled/healthy status
+with ready instances or usable route/endpoint data. If status still reports
+`enabled=false`, unhealthy, zero ready instances, missing routes/endpoints, or
+logs such as "Failed to enable ingress plugin", surface that ingress remains
+disabled and continue retry/remediation rather than reporting success.
 
 For workload lifecycle cleanup, use `monk.workload.status` to inspect first,
 then `monk.workload.stop`, `monk.workload.delete`/`purge`, or
