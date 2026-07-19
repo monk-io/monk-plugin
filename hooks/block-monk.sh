@@ -20,11 +20,12 @@ if [ -x "$agent" ]; then
   fi
 fi
 
-# Fallback: binary unavailable. Grep the raw hook payload for a `monk` command.
-# Matches `monk` only in command position (start, or after a shell separator),
-# optional `sudo`, followed by whitespace/quote/end — so `monkey` is not matched.
-# False positives only ever BLOCK, never allow, which is the safe direction.
-if printf '%s' "$input" | grep -Eq '(^|["[:space:];&|`(])(sudo[[:space:]]+)?monk([[:space:]"]|$)'; then
+# Fallback: binary unavailable. Normalize common JSON/shell quoting first, then
+# look only at command starts or shell command separators. This catches
+# `"monk"`, `'monk'`, and `\monk` without blocking harmless arguments like
+# `grep monk README.md`.
+fallback_input="$(printf '%s' "$input" | sed "s/\\\\\"/\"/g; s/\\\\\\\\//g; s/[\"']//g")"
+if printf '%s' "$fallback_input" | grep -Eq '(^|CommandLine:[[:space:]]*|command:[[:space:]]*|[;&|`(][[:space:]]*)(sudo[[:space:]]+)?monk([[:space:];&|`)}]|$)'; then
   cat <<'JSON'
 {
   "hookSpecificOutput": {
