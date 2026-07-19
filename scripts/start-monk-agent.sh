@@ -204,6 +204,30 @@ if [ -n "$agent_hash_after" ] && [ "$agent_hash_before" != "$agent_hash_after" ]
   agent_updated=1
 fi
 
+xml_escape() {
+  printf '%s' "$1" | sed \
+    -e 's/&/\&amp;/g' \
+    -e 's/</\&lt;/g' \
+    -e 's/>/\&gt;/g' \
+    -e 's/"/\&quot;/g' \
+    -e "s/'/\&apos;/g"
+}
+
+if [ "$os" = "Darwin" ]; then
+  launchd_label_xml="$(xml_escape "$launchd_label")"
+  agent_path_xml="$(xml_escape "$agent_path")"
+  host_xml="$(xml_escape "$host")"
+  port_xml="$(xml_escape "$port")"
+  auth_url_xml="$(xml_escape "$auth_url")"
+  auth_client_id_xml="$(xml_escape "$auth_client_id")"
+  auth_audience_xml="$(xml_escape "$auth_audience")"
+  autospin_url_xml="$(xml_escape "$autospin_url")"
+  agent_local_xml="$(xml_escape "${MONK_AGENT_LOCAL:-}")"
+  plugin_version_xml="$(xml_escape "${MONK_PLUGIN_VERSION:-}")"
+  agent_path_env_xml="$(xml_escape "$agent_path_env")"
+  log_file_xml="$(xml_escape "$log_file")"
+fi
+
 launchd_configured() {
   # Deliberately excludes PATH: it is derived from the invoking shell/app and
   # legitimately differs across hosts (Claude Code, VS Code, plain terminal) and
@@ -217,12 +241,12 @@ launchd_configured() {
   # moment the agent should restart so telemetry reports the new version. It
   # cannot cause the per-session restart churn PATH did.
   [ -f "$launchd_plist" ] &&
-    grep -q "<string>$auth_client_id</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_url</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_audience</string>" "$launchd_plist" &&
-    grep -q "<string>$autospin_url</string>" "$launchd_plist" &&
-    grep -q "<string>${MONK_AGENT_LOCAL:-}</string>" "$launchd_plist" &&
-    grep -q "<string>${MONK_PLUGIN_VERSION:-}</string>" "$launchd_plist"
+    grep -Fq "<string>$auth_client_id_xml</string>" "$launchd_plist" &&
+    grep -Fq "<string>$auth_url_xml</string>" "$launchd_plist" &&
+    grep -Fq "<string>$auth_audience_xml</string>" "$launchd_plist" &&
+    grep -Fq "<string>$autospin_url_xml</string>" "$launchd_plist" &&
+    grep -Fq "<string>$agent_local_xml</string>" "$launchd_plist" &&
+    grep -Fq "<string>$plugin_version_xml</string>" "$launchd_plist"
 }
 
 if [ "${MONK_AGENT_SKIP_ENSURE:-0}" != "1" ]; then
@@ -247,15 +271,15 @@ start_with_launchd() {
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>$launchd_label</string>
+  <string>$launchd_label_xml</string>
   <key>ProgramArguments</key>
   <array>
-    <string>$agent_path</string>
+    <string>$agent_path_xml</string>
     <string>serve</string>
     <string>--host</string>
-    <string>$host</string>
+    <string>$host_xml</string>
     <string>--port</string>
-    <string>$port</string>
+    <string>$port_xml</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -276,24 +300,24 @@ start_with_launchd() {
   <key>EnvironmentVariables</key>
   <dict>
     <key>MONK_AUTH_URL</key>
-    <string>$auth_url</string>
+    <string>$auth_url_xml</string>
     <key>MONK_AGENT_AUTH_CLIENT_ID</key>
-    <string>$auth_client_id</string>
+    <string>$auth_client_id_xml</string>
     <key>MONK_AUTH_AUDIENCE</key>
-    <string>$auth_audience</string>
+    <string>$auth_audience_xml</string>
     <key>MONK_AUTOSPIN_URL</key>
-    <string>$autospin_url</string>
+    <string>$autospin_url_xml</string>
     <key>MONK_AGENT_LOCAL</key>
-    <string>${MONK_AGENT_LOCAL:-}</string>
+    <string>$agent_local_xml</string>
     <key>MONK_PLUGIN_VERSION</key>
-    <string>${MONK_PLUGIN_VERSION:-}</string>
+    <string>$plugin_version_xml</string>
     <key>PATH</key>
-    <string>$agent_path_env</string>
+    <string>$agent_path_env_xml</string>
   </dict>
   <key>StandardOutPath</key>
-  <string>$log_file</string>
+  <string>$log_file_xml</string>
   <key>StandardErrorPath</key>
-  <string>$log_file</string>
+  <string>$log_file_xml</string>
 </dict>
 </plist>
 EOF
