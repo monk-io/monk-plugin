@@ -62,6 +62,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Test Windows block-monk fallbacks
+        shell: pwsh
+        run: .\tests\block-monk-windows.ps1
+
       - name: Install monk-agent
         shell: pwsh
         env:
