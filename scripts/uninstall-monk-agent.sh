@@ -79,6 +79,28 @@ if [ "$assume_yes" != "1" ]; then
   esac
 fi
 
+pid_matches_agent() {
+  pid="$1"
+  if [ ! -e "$target" ]; then
+    return 1
+  fi
+
+  if [ -r "/proc/$pid/exe" ] && command -v readlink >/dev/null 2>&1; then
+    proc_exe="$(readlink "/proc/$pid/exe" 2>/dev/null || true)"
+    case "$proc_exe" in
+      "$target"|"$target (deleted)") return 0 ;;
+      *) return 1 ;;
+    esac
+  fi
+
+  proc_args="$(ps -p "$pid" -o args= 2>/dev/null || true)"
+  case "$proc_args" in
+    "$target"|"$target "*) return 0 ;;
+  esac
+
+  return 1
+}
+
 stop_agent() {
   os="$(uname -s 2>/dev/null || printf unknown)"
   if [ "$os" = "Darwin" ] && command -v launchctl >/dev/null 2>&1; then
@@ -93,7 +115,11 @@ stop_agent() {
       ''|*[!0-9]*) ;;
       *)
         if kill -0 "$pid" >/dev/null 2>&1; then
-          kill "$pid" >/dev/null 2>&1 || true
+          if pid_matches_agent "$pid"; then
+            kill "$pid" >/dev/null 2>&1 || true
+          else
+            echo "Ignoring stale monk-agent PID $pid: process does not match $target." >&2
+          fi
         fi
         ;;
     esac
