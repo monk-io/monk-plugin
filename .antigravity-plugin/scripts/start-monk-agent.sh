@@ -342,6 +342,11 @@ while [ "$tries" -lt 180 ]; do
     emit_signin_nudge
     exit 0
   fi
+  if [ "$os" != "Darwin" ] && ! kill -0 "$pid" 2>/dev/null; then
+    echo "monk-agent process $pid exited before becoming ready." >&2
+    echo "Log: $log_file" >&2
+    exit 1
+  fi
   tries=$((tries + 1))
   sleep 1
 done
