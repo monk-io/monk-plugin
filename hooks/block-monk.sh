@@ -24,7 +24,10 @@ fi
 # Matches `monk` only in command position (start, or after a shell separator),
 # optional `sudo`, followed by whitespace/quote/end — so `monkey` is not matched.
 # False positives only ever BLOCK, never allow, which is the safe direction.
-if printf '%s' "$input" | grep -Eq '(^|["[:space:];&|`(])(sudo[[:space:]]+)?monk([[:space:]"]|$)'; then
+#
+# Strip double and single quotes first so `"monk"`, `'monk'`, and `\"monk\"`
+# (JSON-escaped quotes) are all normalized to bare monk before matching.
+if printf '%s' "$input" | tr -d '"'"'" | grep -Eq '(^|[:[:space:];&|`\\])(sudo[[:space:]]+)?monk([[:space:]]|$)'; then
   cat <<'JSON'
 {
   "hookSpecificOutput": {
