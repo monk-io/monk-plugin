@@ -72,11 +72,11 @@ register_antigravity_mcp() {
     if [ "$has_existing" = "1" ]; then
       python3 -c "
 import json, sys
-cfg = json.load(open('$mcp_cfg'))
-cfg.setdefault('mcpServers', {})['monk'] = {'serverUrl': '$server_url'}
+cfg = json.load(open(sys.argv[1]))
+cfg.setdefault('mcpServers', {})['monk'] = {'serverUrl': sys.argv[2]}
 json.dump(cfg, sys.stdout, indent=2)
 print()
-" >"$tmp"
+" "$mcp_cfg" "$server_url" >"$tmp"
     else
       printf '{"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >"$tmp"
     fi
