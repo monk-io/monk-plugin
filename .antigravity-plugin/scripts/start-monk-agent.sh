@@ -62,25 +62,35 @@ register_antigravity_mcp() {
     has_existing=1
   fi
   tmp="$(mktemp)"
+  generated=0
   if command -v jq >/dev/null 2>&1; then
     if [ "$has_existing" = "1" ]; then
-      jq --arg u "$server_url" '.mcpServers.monk = {serverUrl: $u}' "$mcp_cfg" >"$tmp"
+      if jq --arg u "$server_url" '.mcpServers.monk = {serverUrl: $u}' "$mcp_cfg" >"$tmp" 2>/dev/null; then
+        generated=1
+      fi
     else
-      jq -n --arg u "$server_url" '{mcpServers: {monk: {serverUrl: $u}}}' >"$tmp"
+      if jq -n --arg u "$server_url" '{mcpServers: {monk: {serverUrl: $u}}}' >"$tmp" 2>/dev/null; then
+        generated=1
+      fi
     fi
-  elif command -v python3 >/dev/null 2>&1; then
+  fi
+  if [ "$generated" = "0" ] && command -v python3 >/dev/null 2>&1; then
     if [ "$has_existing" = "1" ]; then
-      python3 -c "
+      if python3 -c "
 import json, sys
-cfg = json.load(open('$mcp_cfg'))
-cfg.setdefault('mcpServers', {})['monk'] = {'serverUrl': '$server_url'}
+cfg = json.load(open(sys.argv[1]))
+cfg.setdefault('mcpServers', {})['monk'] = {'serverUrl': sys.argv[2]}
 json.dump(cfg, sys.stdout, indent=2)
 print()
-" >"$tmp"
+" "$mcp_cfg" "$server_url" >"$tmp" 2>/dev/null; then
+        generated=1
+      fi
     else
       printf '{"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >"$tmp"
+      generated=1
     fi
-  else
+  fi
+  if [ "$generated" = "0" ]; then
     rm -f "$tmp"
     echo "Add monk to $mcp_cfg to enable Antigravity MCP (jq or python3 required to auto-write):" >&2
     printf '  {"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >&2
