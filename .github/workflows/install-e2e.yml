@@ -27,6 +27,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Test concurrent installer staging
+        shell: bash
+        run: ./tests/ensure-monk-agent-concurrent.sh
+
       - name: Install monk-agent
         shell: bash
         env:

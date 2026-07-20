@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+script_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 case "$(uname -s 2>/dev/null || printf unknown)" in
   MINGW*|MSYS*|CYGWIN*)
     exec powershell.exe -NoProfile -ExecutionPolicy Bypass \
@@ -35,9 +35,6 @@ esac
 
 url="$download_base/$platform_path/$artifact"
 checksum_url="$url.sha256"
-archive_tmp="$install_dir/.monk-agent.tmp.tar.gz"
-checksum_tmp="$install_dir/.monk-agent.tmp.sha256"
-extract_dir="$install_dir/.monk-agent.extract"
 mkdir -p "$install_dir"
 
 if [ "$auto_update" = "0" ] || [ "$auto_update" = "false" ]; then
@@ -50,6 +47,34 @@ if [ "$auto_update" = "0" ] || [ "$auto_update" = "false" ]; then
     exit 0
   fi
 fi
+
+old_umask="$(umask)"
+umask 077
+staging_dir="$(mktemp -d "$install_dir/.monk-agent.stage.XXXXXX")"
+umask "$old_umask"
+archive_tmp="$staging_dir/monk-agent.tar.gz"
+checksum_tmp="$staging_dir/monk-agent.sha256"
+extract_dir="$staging_dir/extract"
+checksum_publish="$staging_dir/monk-agent.installed.sha256"
+
+cleanup() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  rm -rf "$staging_dir"
+  exit "$status"
+}
+
+cleanup_signal() {
+  status="$1"
+  trap - EXIT HUP INT TERM
+  rm -rf "$staging_dir"
+  exit "$status"
+}
+
+trap cleanup EXIT
+trap 'cleanup_signal 129' HUP
+trap 'cleanup_signal 130' INT
+trap 'cleanup_signal 143' TERM
 
 if command -v curl >/dev/null 2>&1; then
   curl -fL "$checksum_url" -o "$checksum_tmp"
@@ -97,6 +122,6 @@ mkdir -p "$extract_dir"
 tar -xzf "$archive_tmp" -C "$extract_dir"
 chmod 0755 "$extract_dir/monk-agent"
 mv "$extract_dir/monk-agent" "$target"
-printf '%s  %s\n' "$expected" "$artifact" >"$checksum_installed"
-rm -rf "$extract_dir" "$archive_tmp" "$checksum_tmp"
+printf '%s  %s\n' "$expected" "$artifact" >"$checksum_publish"
+mv "$checksum_publish" "$checksum_installed"
 printf '%s\n' "$target"
