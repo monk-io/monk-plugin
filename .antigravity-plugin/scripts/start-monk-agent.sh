@@ -73,7 +73,11 @@ register_antigravity_mcp() {
       python3 -c "
 import json, sys
 cfg = json.load(open('$mcp_cfg'))
-cfg.setdefault('mcpServers', {})['monk'] = {'serverUrl': '$server_url'}
+servers = cfg.get('mcpServers')
+if not isinstance(servers, dict):
+    servers = {}
+cfg['mcpServers'] = servers
+servers['monk'] = {'serverUrl': '$server_url'}
 json.dump(cfg, sys.stdout, indent=2)
 print()
 " >"$tmp"
@@ -341,6 +345,13 @@ while [ "$tries" -lt 180 ]; do
     register_antigravity_mcp
     emit_signin_nudge
     exit 0
+  fi
+  # Break early if the background process has exited — no point waiting 180s.
+  if [ -f "$pid_file" ]; then
+    _pid="$(cat "$pid_file" 2>/dev/null || true)"
+    if [ -n "$_pid" ] && ! kill -0 "$_pid" 2>/dev/null; then
+      break
+    fi
   fi
   tries=$((tries + 1))
   sleep 1
