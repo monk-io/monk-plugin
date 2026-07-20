@@ -335,17 +335,16 @@ case "$os" in
   *) start_with_background_process ;;
 esac
 
-tries=0
-while [ "$tries" -lt 180 ]; do
+deadline=$(( $(date +%s) + 170 ))
+while [ "$(date +%s)" -lt "$deadline" ]; do
   if is_running; then
     register_antigravity_mcp
     emit_signin_nudge
     exit 0
   fi
-  tries=$((tries + 1))
   sleep 1
 done
 
-echo "monk-agent did not become ready at $health_url within 180s." >&2
+echo "monk-agent did not become ready at $health_url within 170s." >&2
 echo "Log: $log_file" >&2
 exit 1

@@ -222,7 +222,8 @@ $Process = Start-Process `
 
 $Process.Id | Set-Content -NoNewline $PidFile
 
-for ($Attempt = 0; $Attempt -lt 180; $Attempt++) {
+$Deadline = [DateTimeOffset]::UtcNow.AddSeconds(170).ToUnixTimeSeconds()
+while ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() -lt $Deadline) {
   if (Test-AgentRunning) {
     Show-SigninNudge
     exit 0
@@ -233,5 +234,5 @@ for ($Attempt = 0; $Attempt -lt 180; $Attempt++) {
   Start-Sleep -Seconds 1
 }
 
-Write-Error "monk-agent did not become ready at $HealthUrl within 180s. Logs: $LogOut, $LogErr"
+Write-Error "monk-agent did not become ready at $HealthUrl within 170s. Logs: $LogOut, $LogErr"
 exit 1
