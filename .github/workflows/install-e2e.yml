@@ -38,6 +38,16 @@ jobs:
           test "$installed" = "$MONK_AGENT_INSTALL_DIR/monk-agent"
           test -x "$installed"
 
+      - name: Reuse installed agent when update endpoint is unavailable
+        shell: bash
+        env:
+          MONK_AGENT_INSTALL_DIR: ${{ runner.temp }}/monk-bin
+          MONK_AGENT_DOWNLOAD_BASE: http://127.0.0.1:1
+        run: |
+          set -euo pipefail
+          installed="$(./scripts/ensure-monk-agent.sh)"
+          test "$installed" = "$MONK_AGENT_INSTALL_DIR/monk-agent"
+
       - name: Run monk-agent status
         shell: bash
         env:
@@ -78,6 +88,17 @@ jobs:
           }
           if (-not (Test-Path $installed)) {
             throw "monk-agent.exe was not installed"
+          }
+
+      - name: Reuse installed agent when update endpoint is unavailable
+        shell: pwsh
+        env:
+          MONK_AGENT_INSTALL_DIR: ${{ runner.temp }}\monk-bin
+          MONK_AGENT_DOWNLOAD_BASE: http://127.0.0.1:1
+        run: |
+          $installed = .\scripts\ensure-monk-agent.ps1
+          if ($installed -ne "$env:MONK_AGENT_INSTALL_DIR\monk-agent.exe") {
+            throw "unexpected offline fallback path: $installed"
           }
 
       - name: Run monk-agent status
