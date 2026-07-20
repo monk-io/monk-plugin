@@ -62,7 +62,7 @@ fi
 
 expected="$(awk '{print $1}' "$checksum_tmp")"
 
-if [ -x "$target" ] && [ -f "$checksum_installed" ]; then
+if [ -x "$target" ] && [ -s "$target" ] && [ -f "$checksum_installed" ]; then
   installed="$(awk '{print $1}' "$checksum_installed")"
   if [ "$installed" = "$expected" ]; then
     rm -f "$checksum_tmp"
