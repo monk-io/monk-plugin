@@ -126,7 +126,7 @@ emit_signin_nudge() {
     [ "$attempt" -lt 3 ] && sleep 1
   done
   case "$body" in
-    *'"signedIn":true'*) return 0 ;;
+    *'"signedIn":'*true*) return 0 ;;
   esac
   # Empty body = read error / 500 / timeout, NOT a confirmed signed-out state —
   # suppress the nudge. Only an affirmative signedIn:false reaches the nudge below.
@@ -341,6 +341,13 @@ while [ "$tries" -lt 180 ]; do
     register_antigravity_mcp
     emit_signin_nudge
     exit 0
+  fi
+  # Break early if the background process has exited — no point waiting 180s.
+  if [ -f "$pid_file" ]; then
+    pid="$(cat "$pid_file" 2>/dev/null || true)"
+    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+      break
+    fi
   fi
   tries=$((tries + 1))
   sleep 1
