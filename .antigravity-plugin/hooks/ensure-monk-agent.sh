@@ -14,8 +14,19 @@ host="${MONK_AGENT_HOST:-127.0.0.1}"
 health_url="http://$host:$port/.well-known/oauth-protected-resource"
 
 is_running() {
-  command -v curl >/dev/null 2>&1 || return 1
-  curl -fsS --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
+  expected_resource="http://$host:$port/mcp"
+  health_body=""
+  if command -v curl >/dev/null 2>&1; then
+    health_body="$(curl -fsS --max-time 2 "$health_url" 2>/dev/null || true)"
+  elif command -v wget >/dev/null 2>&1; then
+    health_body="$(wget -q -T 2 -O - "$health_url" 2>/dev/null || true)"
+  else
+    return 1
+  fi
+  case "$health_body" in
+    *"$expected_resource"*) return 0 ;;
+  esac
+  return 1
 }
 
 # Fast path — already up
@@ -29,11 +40,15 @@ agent_path="${MONK_AGENT_PATH:-${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk
 
 if [ ! -x "$agent_path" ]; then
   plugin_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-  jq -n --arg script "$plugin_dir/scripts/start-monk-agent.sh" '{
-    injectSteps: [{
-      ephemeralMessage: ("monk-agent is not installed. Run `" + $script + "` once to install and start it, then continue.")
-    }]
-  }'
+  if command -v jq >/dev/null 2>&1; then
+    jq -n --arg script "$plugin_dir/scripts/start-monk-agent.sh" '{
+      injectSteps: [{
+        ephemeralMessage: ("monk-agent is not installed. Run `" + $script + "` once to install and start it, then continue.")
+      }]
+    }'
+  else
+    printf '{"injectSteps":[{"ephemeralMessage":"monk-agent is not installed. Run `%s` once to install and start it, then continue."}]}\n' "$plugin_dir/scripts/start-monk-agent.sh"
+  fi
   exit 0
 fi
 
@@ -55,8 +70,13 @@ else
   "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &
 fi
 
-jq -n '{
-  injectSteps: [{
-    ephemeralMessage: "monk-agent was not running and has been started. It may take a few seconds to initialize — use monk.install.status or monk.runtime.status to check readiness before issuing Monk operations."
-  }]
-}'
+started_msg="monk-agent was not running and has been started. It may take a few seconds to initialize — use monk.install.status or monk.runtime.status to check readiness before issuing Monk operations."
+if command -v jq >/dev/null 2>&1; then
+  jq -n --arg msg "$started_msg" '{
+    injectSteps: [{
+      ephemeralMessage: $msg
+    }]
+  }'
+else
+  printf '{"injectSteps":[{"ephemeralMessage":"%s"}]}\n' "$started_msg"
+fi
