@@ -19,7 +19,7 @@ if (Test-Path $agent) {
 try { $command = ($hookInput | ConvertFrom-Json).tool_input.command } catch { exit 0 }
 if (-not $command) { exit 0 }
 
-if ($command -match '(^|[;&|`(])\s*(sudo\s+)?monk(\s|$)') {
+if ($command -match '(^|[;&|`({\n])\s*(sudo\s+)?monk(\s|$)') {
   @{
     hookSpecificOutput = @{
       hookEventName            = "PreToolUse"

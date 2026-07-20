@@ -29,7 +29,7 @@ if (Test-Path $agent) {
 try { $command = ($hookInput | ConvertFrom-Json).toolCall.args.CommandLine } catch { exit 0 }
 if (-not $command) { exit 0 }
 
-if ($command -match '(^|[;&|`(])\s*(sudo\s+)?monk(\s|$)') {
+if ($command -match '(^|[;&|`({\n])\s*(sudo\s+)?monk(\s|$)') {
   @{
     decision = "deny"
     reason   = "Blocked: do not shell out to the ``monk`` CLI - it desyncs the cluster state Monk manages. Use the monk-agent MCP tools instead."
