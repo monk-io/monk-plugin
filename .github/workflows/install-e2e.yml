@@ -106,6 +106,43 @@ jobs:
             throw "expected simulated auth to be signed in"
           }
 
+      - name: Preserve differently located agent from stale PID
+        shell: pwsh
+        env:
+          MONK_AGENT_DEV: "1"
+          MONK_AGENT_SIMULATE_AUTH: "1"
+          MONK_AGENT_MOCK_RUNTIME: "1"
+          MONK_AGENT_VAULT_BACKEND: file
+          MONK_AGENT_STORE: file
+          MONK_AGENT_OPEN_BROWSER: "0"
+          MONK_TELEMETRY: "0"
+        run: |
+          $otherDir = "$env:RUNNER_TEMP\other-monk-bin"
+          $env:MONK_AGENT_HOME = "$env:RUNNER_TEMP\stale-pid-home"
+          $env:MONK_AGENT_INSTALL_DIR = "$env:RUNNER_TEMP\managed-stale-bin"
+          New-Item -ItemType Directory -Force -Path $otherDir | Out-Null
+          $otherAgent = Join-Path $otherDir "monk-agent.exe"
+          Copy-Item "$env:RUNNER_TEMP\monk-bin\monk-agent.exe" $otherAgent
+
+          $otherProcess = Start-Process `
+            -FilePath $otherAgent `
+            -ArgumentList @("serve", "--host", "127.0.0.1", "--port", "17423") `
+            -PassThru `
+            -WindowStyle Hidden
+          try {
+            $pidDir = Join-Path $env:MONK_AGENT_HOME "agent\launcher\run"
+            New-Item -ItemType Directory -Force -Path $pidDir | Out-Null
+            $otherProcess.Id | Set-Content -NoNewline (Join-Path $pidDir "monk-agent.pid")
+
+            .\scripts\uninstall-monk-agent.ps1 -Yes -KeepData
+            $otherProcess.Refresh()
+            if ($otherProcess.HasExited) {
+              throw "uninstaller stopped a monk-agent.exe outside the managed install path"
+            }
+          } finally {
+            Stop-Process -Id $otherProcess.Id -Force -ErrorAction SilentlyContinue
+          }
+
       - name: Start monk-agent
         shell: pwsh
         env:

@@ -39,6 +39,22 @@ if (-not $Yes) {
   }
 }
 
+function Test-SameFilePath {
+  param([string]$Actual, [string]$Expected)
+  if (-not $Actual -or -not $Expected) {
+    return $false
+  }
+  try {
+    return [string]::Equals(
+      [IO.Path]::GetFullPath($Actual),
+      [IO.Path]::GetFullPath($Expected),
+      [StringComparison]::OrdinalIgnoreCase
+    )
+  } catch {
+    return $false
+  }
+}
+
 function Stop-ManagedAgent {
   if (-not (Test-Path $PidFile)) {
     return
@@ -61,11 +77,11 @@ function Stop-ManagedAgent {
   $process = Get-Process -Id $ParsedPid -ErrorAction SilentlyContinue
   if ($process) {
     try {
-      $name = [IO.Path]::GetFileName($process.Path)
+      $processPath = $process.Path
     } catch {
-      $name = ""
+      $processPath = ""
     }
-    if (-not $name -or $name -ieq "monk-agent.exe") {
+    if (Test-SameFilePath $processPath $Target) {
       Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
     }
   }
