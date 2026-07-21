@@ -83,14 +83,14 @@ function Stop-ManagedAgent {
 }
 
 if ($AutoUpdate -eq "0" -or $AutoUpdate -eq "false") {
-  $Existing = Get-Command monk-agent.exe -ErrorAction SilentlyContinue
-  if ($Existing) {
-    Write-Output $Existing.Source
+  if (Test-Path $Target) {
+    Write-Output $Target
     exit 0
   }
 
-  if (Test-Path $Target) {
-    Write-Output $Target
+  $Existing = Get-Command monk-agent.exe -ErrorAction SilentlyContinue
+  if ($Existing) {
+    Write-Output $Existing.Source
     exit 0
   }
 }
