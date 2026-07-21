@@ -116,7 +116,16 @@ jobs:
           MONK_AGENT_SKIP_ENSURE: "1"
           MONK_TELEMETRY: "0"
         run: |
+          Remove-Item Env:MONK_PLUGIN_VERSION -ErrorAction SilentlyContinue
           .\scripts\start-monk-agent.ps1
+          $versionSource = Get-Content -Raw .\scripts\plugin-version.sh
+          $versionMatch = [regex]::Match($versionSource, '(?m)^MONK_PLUGIN_VERSION="([^"\r\n]+)"\s*$')
+          if (-not $versionMatch.Success) {
+            throw "plugin-version.sh did not contain MONK_PLUGIN_VERSION"
+          }
+          if ($env:MONK_PLUGIN_VERSION -ne $versionMatch.Groups[1].Value) {
+            throw "Windows launcher did not propagate the rendered plugin version"
+          }
           $pidPath = Join-Path $env:MONK_AGENT_HOME "agent\launcher\run\monk-agent.pid"
           if (-not (Test-Path $pidPath)) {
             throw "monk-agent pid file was not created"

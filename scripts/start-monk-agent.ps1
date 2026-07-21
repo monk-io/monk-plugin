@@ -8,6 +8,20 @@ $AuthAudience = if ($env:MONK_AUTH_AUDIENCE) { $env:MONK_AUTH_AUDIENCE } else { 
 $AutospinUrl = if ($env:MONK_AUTOSPIN_URL) { $env:MONK_AUTOSPIN_URL } else { "wss://api.app.monk.io/autospin/" }
 
 $ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+# Rendered at plugin build time; carries MONK_PLUGIN_VERSION so the Windows
+# agent reports the plugin release rather than falling back to its binary
+# version. Guarded so older rendered plugins without the file still launch.
+$PluginVersionFile = Join-Path $ScriptDir "plugin-version.sh"
+if (Test-Path -LiteralPath $PluginVersionFile) {
+  $PluginVersionMatch = [regex]::Match(
+    (Get-Content -Raw -LiteralPath $PluginVersionFile),
+    '(?m)^MONK_PLUGIN_VERSION="([^"\r\n]+)"\s*$'
+  )
+  if ($PluginVersionMatch.Success) {
+    $env:MONK_PLUGIN_VERSION = $PluginVersionMatch.Groups[1].Value
+  }
+}
+
 $PluginRoot = if ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { Split-Path -Parent $ScriptDir }
 $InstallDir = if ($env:MONK_AGENT_INSTALL_DIR) { $env:MONK_AGENT_INSTALL_DIR } else { Join-Path $HOME ".monk\bin" }
 $MonkHome = if ($env:MONK_AGENT_HOME) { $env:MONK_AGENT_HOME } else { Join-Path $HOME ".monk" }
