@@ -64,12 +64,34 @@ health_url="http://$host:$port/.well-known/oauth-protected-resource"
 # Register monk in Antigravity's global MCP config if ~/.gemini/config/ exists.
 # Idempotent — skips if already registered. Uses jq when available; prints
 # manual instructions otherwise.
+antigravity_monk_mcp_registered() {
+  cfg_path="$1"
+  if command -v jq >/dev/null 2>&1; then
+    jq -e '(.mcpServers // {}) as $servers | ($servers | type) == "object" and ($servers | has("monk"))' "$cfg_path" >/dev/null 2>&1
+    return $?
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1], encoding='utf-8') as fh:
+        cfg = json.load(fh)
+except Exception:
+    sys.exit(1)
+servers = cfg.get('mcpServers') if isinstance(cfg, dict) else None
+sys.exit(0 if isinstance(servers, dict) and 'monk' in servers else 1)
+" "$cfg_path"
+    return $?
+  fi
+  return 1
+}
+
 register_antigravity_mcp() {
   gemini_cfg="$HOME/.gemini/config"
   [ -d "$gemini_cfg" ] || return 0
   mcp_cfg="$gemini_cfg/mcp_config.json"
   server_url="http://$host:$port/mcp"
-  if [ -f "$mcp_cfg" ] && grep -q '"monk"' "$mcp_cfg" 2>/dev/null; then
+  if [ -f "$mcp_cfg" ] && antigravity_monk_mcp_registered "$mcp_cfg"; then
     return 0
   fi
   # Treat an empty file the same as a missing file to avoid jq/python parse errors.
