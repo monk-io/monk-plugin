@@ -118,6 +118,60 @@ jobs:
             throw "disabled-update bootstrap selected PATH agent: $installed"
           }
 
+      - name: Serialize concurrent Windows installers
+        shell: pwsh
+        env:
+          MONK_AGENT_INSTALL_DIR: ${{ runner.temp }}\monk-bin
+        run: |
+          $script = (Resolve-Path ".\scripts\ensure-monk-agent.ps1").Path
+          $checksum = "$env:MONK_AGENT_INSTALL_DIR\monk-agent.sha256"
+          $gate = "$env:RUNNER_TEMP\monk-installer-gate-$([Guid]::NewGuid())"
+
+          $jobs = 1..2 | ForEach-Object {
+            Start-Job -ArgumentList $script, $checksum, $gate, $env:MONK_AGENT_INSTALL_DIR -ScriptBlock {
+              param($script, $checksum, $gate, $installDir)
+              $ErrorActionPreference = "Stop"
+              $env:MONK_AGENT_INSTALL_DIR = $installDir
+
+              New-Item -ItemType File -Path "$gate-$PID" | Out-Null
+              while ((Get-ChildItem "$gate-*" -ErrorAction SilentlyContinue).Count -lt 2) {
+                Start-Sleep -Milliseconds 20
+              }
+
+              function Invoke-WebRequest {
+                param([string]$Uri, [string]$OutFile)
+                $bytes = [IO.File]::ReadAllBytes($checksum)
+                $stream = [IO.File]::Open(
+                  $OutFile,
+                  [IO.FileMode]::Create,
+                  [IO.FileAccess]::Write,
+                  [IO.FileShare]::None
+                )
+                try {
+                  $stream.Write($bytes, 0, $bytes.Length)
+                  $stream.Flush()
+                  Start-Sleep -Milliseconds 750
+                } finally {
+                  $stream.Dispose()
+                }
+              }
+
+              & $script
+            }
+          }
+
+          $jobs | Wait-Job | Out-Null
+          $errors = @()
+          $results = $jobs | Receive-Job -ErrorVariable +errors
+          $states = $jobs.State
+          $jobs | Remove-Job -Force
+          if ($errors -or $states -contains "Failed") {
+            throw "concurrent installer failed: $($errors -join '; ')"
+          }
+          if (@($results | Where-Object { $_ -eq "$env:MONK_AGENT_INSTALL_DIR\monk-agent.exe" }).Count -ne 2) {
+            throw "concurrent installers did not both return the managed agent path"
+          }
+
       - name: Run monk-agent status
         shell: pwsh
         env:
