@@ -80,6 +80,29 @@ jobs:
             throw "monk-agent.exe was not installed"
           }
 
+      - name: Prefer managed agent when updates are disabled
+        shell: pwsh
+        env:
+          MONK_AGENT_INSTALL_DIR: ${{ runner.temp }}\monk-bin
+          MONK_AGENT_AUTO_UPDATE: "0"
+        run: |
+          $otherDir = "$env:RUNNER_TEMP\other-monk-bin"
+          New-Item -ItemType Directory -Force -Path $otherDir | Out-Null
+          Copy-Item `
+            "$env:MONK_AGENT_INSTALL_DIR\monk-agent.exe" `
+            "$otherDir\monk-agent.exe"
+          $env:PATH = "$otherDir;$env:PATH"
+
+          $installed = .\scripts\ensure-monk-agent.ps1
+          $expected = "$env:MONK_AGENT_INSTALL_DIR\monk-agent.exe"
+          if (-not [string]::Equals(
+            [IO.Path]::GetFullPath($installed),
+            [IO.Path]::GetFullPath($expected),
+            [StringComparison]::OrdinalIgnoreCase
+          )) {
+            throw "disabled-update bootstrap selected PATH agent: $installed"
+          }
+
       - name: Run monk-agent status
         shell: pwsh
         env:
