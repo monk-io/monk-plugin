@@ -28,7 +28,7 @@ fi
 agent_path="${MONK_AGENT_PATH:-${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent}"
 
 if [ ! -x "$agent_path" ]; then
-  plugin_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+  plugin_dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
   jq -n --arg script "$plugin_dir/scripts/start-monk-agent.sh" '{
     injectSteps: [{
       ephemeralMessage: ("monk-agent is not installed. Run `" + $script + "` once to install and start it, then continue.")
@@ -38,9 +38,39 @@ if [ ! -x "$agent_path" ]; then
 fi
 
 # Binary present but not running — start it directly
-log_dir="${MONK_AGENT_HOME:-"$HOME/.monk"}/agent/launcher/logs"
-mkdir -p "$log_dir"
+launcher_dir="${MONK_AGENT_HOME:-"$HOME/.monk"}/agent/launcher"
+log_dir="$launcher_dir/logs"
+run_dir="$launcher_dir/run"
+pid_file="$run_dir/monk-agent.pid"
+mkdir -p "$log_dir" "$run_dir"
 log_file="$log_dir/monk-agent.log"
+
+record_pid() {
+  pid="$1"
+  pid_tmp="$run_dir/.monk-agent.pid.$$"
+  if ! (umask 077 && printf '%s\n' "$pid" >"$pid_tmp"); then
+    rm -f "$pid_tmp"
+    return 1
+  fi
+  if ! mv -f "$pid_tmp" "$pid_file"; then
+    rm -f "$pid_tmp"
+    return 1
+  fi
+}
+
+stop_started_agent() {
+  pid="$1"
+  kill "$pid" >/dev/null 2>&1 || true
+  tries=0
+  while kill -0 "$pid" >/dev/null 2>&1 && [ "$tries" -lt 20 ]; do
+    tries=$((tries + 1))
+    sleep .05
+  done
+  if kill -0 "$pid" >/dev/null 2>&1; then
+    kill -9 "$pid" >/dev/null 2>&1 || true
+  fi
+  wait "$pid" 2>/dev/null || true
+}
 
 export MONK_AUTH_URL="${MONK_AUTH_URL:-https://auth.monk.io}"
 export MONK_AGENT_AUTH_CLIENT_ID="${MONK_AGENT_AUTH_CLIENT_ID:-UW84YWcJME3buMSLfqLX8IbBsYdNWi47}"
@@ -53,6 +83,11 @@ elif command -v nohup >/dev/null 2>&1; then
   nohup "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &
 else
   "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &
+fi
+agent_pid="$!"
+if ! record_pid "$agent_pid"; then
+  stop_started_agent "$agent_pid"
+  exit 1
 fi
 
 jq -n '{

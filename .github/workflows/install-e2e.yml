@@ -27,6 +27,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Test Antigravity hook uninstall lifecycle
+        shell: bash
+        run: ./tests/antigravity-hook-uninstall.sh
+
       - name: Install monk-agent
         shell: bash
         env:
