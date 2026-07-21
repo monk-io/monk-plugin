@@ -54,6 +54,98 @@ jobs:
           grep '"version"' "$RUNNER_TEMP/status.json"
           grep '"signedIn": true' "$RUNNER_TEMP/status.json"
 
+      - name: Verify stale POSIX PID identity
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          MONK_AGENT_HOME: ${{ runner.temp }}/stale-pid-home
+          MONK_AGENT_INSTALL_DIR: ${{ runner.temp }}/monk-bin
+          MONK_AGENT_PORT: "17419"
+          MONK_AGENT_SKIP_ENSURE: "1"
+          MONK_AGENT_SKIP_SIGNIN_NUDGE: "1"
+          MONK_AGENT_DEV: "1"
+          MONK_AGENT_SIMULATE_AUTH: "1"
+          MONK_AGENT_MOCK_RUNTIME: "1"
+          MONK_AGENT_VAULT_BACKEND: file
+          MONK_AGENT_STORE: file
+          MONK_AGENT_OPEN_BROWSER: "0"
+          MONK_TELEMETRY: "0"
+        run: |
+          set -euo pipefail
+          pid_dir="$MONK_AGENT_HOME/agent/launcher/run"
+          mkdir -p "$pid_dir"
+          victim_pid=""
+          agent_pid=""
+          owned_pid=""
+          cleanup() {
+            [ -z "$agent_pid" ] || kill "$agent_pid" >/dev/null 2>&1 || true
+            [ -z "$owned_pid" ] || kill "$owned_pid" >/dev/null 2>&1 || true
+            [ -z "$victim_pid" ] || kill "$victim_pid" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          sleep 300 &
+          victim_pid="$!"
+          printf '%s\n' "$victim_pid" >"$pid_dir/monk-agent.pid"
+
+          ./scripts/start-monk-agent.sh
+          kill -0 "$victim_pid"
+          agent_pid="$(cat "$pid_dir/monk-agent.pid")"
+          test "$agent_pid" != "$victim_pid"
+          kill "$agent_pid"
+          wait "$agent_pid" 2>/dev/null || true
+          agent_pid=""
+
+          uninstall_dir="$RUNNER_TEMP/managed-uninstall-bin"
+          mkdir -p "$uninstall_dir"
+          cp "$MONK_AGENT_INSTALL_DIR/monk-agent" "$uninstall_dir/monk-agent"
+          printf '%s\n' "$victim_pid" >"$pid_dir/monk-agent.pid"
+          MONK_AGENT_INSTALL_DIR="$uninstall_dir" ./scripts/uninstall-monk-agent.sh --yes --keep-data
+          kill -0 "$victim_pid"
+          test ! -f "$pid_dir/monk-agent.pid"
+
+          owned_dir="$RUNNER_TEMP/managed-owned-bin"
+          owned_home="$RUNNER_TEMP/managed-owned-home"
+          owned_pid_dir="$owned_home/agent/launcher/run"
+          mkdir -p "$owned_dir" "$owned_pid_dir"
+          cp "$MONK_AGENT_INSTALL_DIR/monk-agent" "$owned_dir/monk-agent"
+          "$owned_dir/monk-agent" serve --host 127.0.0.1 --port 17420 >/dev/null 2>&1 &
+          owned_pid="$!"
+          printf '%s\n' "$owned_pid" >"$owned_pid_dir/monk-agent.pid"
+
+          ready=0
+          for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+            if curl -fsS --max-time 2 \
+              http://127.0.0.1:17420/.well-known/oauth-protected-resource \
+              | grep -q '"resource"'; then
+              ready=1
+              break
+            fi
+            sleep 0.25
+          done
+          test "$ready" = "1"
+
+          MONK_AGENT_HOME="$owned_home" MONK_AGENT_INSTALL_DIR="$owned_dir" \
+            ./scripts/uninstall-monk-agent.sh --yes --keep-data
+          stopped=0
+          for _ in 1 2 3 4 5; do
+            if ! kill -0 "$owned_pid" >/dev/null 2>&1; then
+              stopped=1
+              break
+            fi
+            state="$(ps -o stat= -p "$owned_pid" 2>/dev/null || true)"
+            case "$state" in
+              ''|Z*) stopped=1; break ;;
+            esac
+            sleep 1
+          done
+          if [ "$stopped" != "1" ]; then
+            echo "uninstaller did not stop the managed monk-agent" >&2
+            exit 1
+          fi
+          wait "$owned_pid" 2>/dev/null || true
+          owned_pid=""
+
   windows:
     name: windows-latest
     runs-on: windows-latest

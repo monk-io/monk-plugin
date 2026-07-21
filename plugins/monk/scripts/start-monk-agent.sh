@@ -196,6 +196,32 @@ hash_file() {
   printf '\n'
 }
 
+resolve_executable_path() {
+  path="$1"
+  if command -v readlink >/dev/null 2>&1; then
+    readlink -f "$path" 2>/dev/null && return 0
+  fi
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$path" 2>/dev/null && return 0
+  fi
+  return 1
+}
+
+pid_matches_executable() {
+  pid="$1"
+  expected_path="$2"
+  case "$pid" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$(uname -s 2>/dev/null || printf unknown)" = "Linux" ] || return 1
+  actual_path="$(readlink "/proc/$pid/exe" 2>/dev/null)" || return 1
+  case "$actual_path" in
+    *" (deleted)") actual_path="${actual_path% *}" ;;
+  esac
+  expected_path="$(resolve_executable_path "$expected_path")" || return 1
+  [ "$actual_path" = "$expected_path" ]
+}
+
 os="$(uname -s)"
 managed_agent_path="${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent"
 agent_hash_before="$(hash_file "$managed_agent_path")"
@@ -340,7 +366,7 @@ EOF
 start_with_background_process() {
   if [ -f "$pid_file" ]; then
     old_pid="$(cat "$pid_file" 2>/dev/null || true)"
-    if [ -n "$old_pid" ]; then
+    if pid_matches_executable "$old_pid" "$agent_path" && kill -0 "$old_pid" >/dev/null 2>&1; then
       kill "$old_pid" >/dev/null 2>&1 || true
     fi
   fi
