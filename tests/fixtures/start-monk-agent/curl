@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+set -eu
+
+printf '%s\n' '{"resource":"http://127.0.0.1:7419/mcp"}'
