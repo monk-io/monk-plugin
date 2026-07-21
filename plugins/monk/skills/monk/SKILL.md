@@ -65,7 +65,7 @@ Before deploying:
    - you need to override the picked root with a specific absolute path, or
    - you want to record host/client/plugin-version metadata for telemetry.
      When you do call it, pass the absolute project directory as `workspaceRoot`
-     and include `pluginVersion: "0.1.42"` so telemetry reports the
+     and include `pluginVersion: "0.1.45"` so telemetry reports the
      real plugin version.
      `monk-agent` never falls back to its own working directory.
 4. Confirm auth status with `monk.auth.status` (once the tools are available). If
@@ -228,7 +228,7 @@ clear selection and return to local mode without deleting cloud infrastructure.
 Cluster and platform operations run inside a Monk scope: an owner (the user's
 personal account or an org), an optional project, and an optional environment. A
 workspace must be bound to one owner/project before scope-gated cluster
-operations (create, grow, shrink, peer changes, registry, switch, delete) will
+operations (create, grow, peer changes, registry, switch, delete) will
 run.
 
 - Check scope with `monk.scope.status` (or read `monk://workspace/scope`) before
@@ -302,7 +302,7 @@ open the required approval flow when needed.
 - Use `monk.workload.logs` for bounded log tails or short bounded follow
   windows. Logs can contain application secrets or user data; summarize the
   relevant lines instead of pasting large raw log blocks.
-- Cluster creation, grow, shrink, peer removal, peer retagging, registry
+- Cluster creation, grow, peer removal, peer retagging, registry
   changes, exit, and delete must go through `monk.cluster.*` tools. The tools
   open the feed approval prompt when approval is required; do not run the
   equivalent `monk cluster ...` command in a shell.
@@ -433,8 +433,15 @@ For a first deploy:
    configuration step that generates or updates MANIFEST and Monk templates.
    Do not call it just to rebuild container images for a normal redeploy. If
    the result has `deferred: true` and `nextAction:
-   "delegate_to_monk_editor"`, delegate `handoff.task` to the `monk-editor`
-   subagent, then rerun analyze/deploy after the editor creates the files.
+   "delegate_to_monk_editor"`, delegate `handoff.task` to a `monk-editor`
+   subagent if one is available — prefer this over authoring the files
+   yourself, since monk-editor's own instructions encode Monk-specific detail
+   (ingress route shape, secret classification rules, package-discovery
+   discipline) you would otherwise have to re-derive from documentation search
+   and risk getting wrong. `handoff.task` is a complete, self-contained work
+   order, so only author the MANIFEST/templates yourself directly if
+   delegation is unavailable or fails. Either way, rerun analyze/deploy once
+   the files exist.
 6. If user-provided secrets or provider credentials are required, request them
    through the local secure web form.
 7. If deploying to cloud or making a risky change, request approval.
@@ -446,13 +453,20 @@ starting a deploy, while still reporting concrete progress and any project- or
 provider-specific blockers as Monk surfaces them.
 
 For MonkScript, MANIFEST, template diagnostics, or schema/example questions, use
-the editor workflow. In Claude Code, delegate hands-on MANIFEST and template
-edits to the `monk-editor` subagent. The editor should read
+the editor workflow. Delegate hands-on MANIFEST and template edits to the
+`monk-editor` subagent whenever one is available — on Claude Code and Cursor
+via their Task/agent-invocation mechanism (both discover it from `agents/
+monk-editor.md` at the plugin root). Prefer delegation over doing this work
+yourself: monk-editor's own instructions encode Monk-specific detail (ingress
+route shape, secret classification rules, package-discovery discipline) that
+redoing this from documentation search alone is prone to miss or get subtly
+wrong. Only do this work directly yourself when no `monk-editor` subagent is
+available or spawning it fails. Either way, read
 `monk://workspace/manifest`, call `monk.analyzer.diagnose`, query Chroma-backed
 docs/examples with `monk.docs.search`, browse Monk packages with
 `monk.package.list` / `monk.package.search` / `monk.package.info`, and inspect
 package schemas with `monk.package.dump` / `monk.dump` before changing files.
-For ArrowScript expressions, the editor should use
+For ArrowScript expressions, use
 `monk.arrowscript.operator.*` tools to verify operators, stack effects,
 arguments, aliases, runtime-only behavior, and deprecations. If those tools
 report that analyzer, Chroma, dump, or operator support is not wired yet, state

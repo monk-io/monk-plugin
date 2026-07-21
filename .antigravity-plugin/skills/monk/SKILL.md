@@ -180,7 +180,7 @@ clear selection and return to local mode without deleting cloud infrastructure.
 Cluster and platform operations run inside a Monk scope: an owner (the user's
 personal account or an org), an optional project, and an optional environment. A
 workspace must be bound to one owner/project before scope-gated cluster
-operations (create, grow, shrink, peer changes, registry, switch, delete) will
+operations (create, grow, peer changes, registry, switch, delete) will
 run.
 
 - Check scope with `monk.scope.status` (or read `monk://workspace/scope`) before
@@ -249,7 +249,7 @@ open the required approval flow when needed.
 - Use `monk.workload.logs` for bounded log tails or short bounded follow
   windows. Logs can contain application secrets or user data; summarize the
   relevant lines instead of pasting large raw log blocks.
-- Cluster creation, grow, shrink, peer removal, peer retagging, registry
+- Cluster creation, grow, peer removal, peer retagging, registry
   changes, exit, and delete must go through `monk.cluster.*` tools. The tools
   open the feed approval prompt when approval is required; do not run the
   equivalent `monk cluster ...` command in a shell.
