@@ -79,6 +79,29 @@ if [ "$assume_yes" != "1" ]; then
   esac
 fi
 
+is_managed_agent_pid() {
+  candidate_pid="$1"
+  case "$candidate_pid" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+
+  # A stale PID can be reused by an unrelated process. Only signal the process
+  # when Linux can prove that it is the installed monk-agent executable.
+  [ -L "/proc/$candidate_pid/exe" ] || return 1
+  running_exe="$(readlink "/proc/$candidate_pid/exe" 2>/dev/null || true)"
+  case "$running_exe" in
+    *' (deleted)') running_exe="${running_exe% (deleted)}" ;;
+  esac
+
+  expected_exe="$(readlink -f "$target" 2>/dev/null || true)"
+  if [ -z "$expected_exe" ]; then
+    expected_dir="$(CDPATH= cd -- "$(dirname -- "$target")" 2>/dev/null && pwd -P)" || return 1
+    expected_exe="$expected_dir/$(basename -- "$target")"
+  fi
+
+  [ -n "$running_exe" ] && [ "$running_exe" = "$expected_exe" ]
+}
+
 stop_agent() {
   os="$(uname -s 2>/dev/null || printf unknown)"
   if [ "$os" = "Darwin" ] && command -v launchctl >/dev/null 2>&1; then
@@ -89,14 +112,9 @@ stop_agent() {
 
   if [ -f "$pid_file" ]; then
     pid="$(cat "$pid_file" 2>/dev/null || true)"
-    case "$pid" in
-      ''|*[!0-9]*) ;;
-      *)
-        if kill -0 "$pid" >/dev/null 2>&1; then
-          kill "$pid" >/dev/null 2>&1 || true
-        fi
-        ;;
-    esac
+    if is_managed_agent_pid "$pid"; then
+      kill "$pid" >/dev/null 2>&1 || true
+    fi
     rm -f "$pid_file"
   fi
 }

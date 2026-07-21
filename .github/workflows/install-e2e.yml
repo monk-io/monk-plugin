@@ -38,6 +38,64 @@ jobs:
           test "$installed" = "$MONK_AGENT_INSTALL_DIR/monk-agent"
           test -x "$installed"
 
+      - name: Preserve unrelated processes referenced by stale PID files
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          MONK_AGENT_INSTALL_DIR: ${{ runner.temp }}/monk-bin
+          MONK_AGENT_HOME: ${{ runner.temp }}/monk-stale-start-home
+          MONK_AGENT_PORT: "17419"
+          MONK_AGENT_DEV: "1"
+          MONK_AGENT_SIMULATE_AUTH: "1"
+          MONK_AGENT_MOCK_RUNTIME: "1"
+          MONK_AGENT_VAULT_BACKEND: file
+          MONK_AGENT_STORE: file
+          MONK_AGENT_OPEN_BROWSER: "0"
+          MONK_AGENT_SKIP_ENSURE: "1"
+          MONK_AGENT_SKIP_SIGNIN_NUDGE: "1"
+          MONK_TELEMETRY: "0"
+        run: |
+          set -euo pipefail
+
+          run_dir="$MONK_AGENT_HOME/agent/launcher/run"
+          pid_file="$run_dir/monk-agent.pid"
+          mkdir -p "$run_dir"
+
+          sleep 300 &
+          victim_pid="$!"
+          printf '%s\n' "$victim_pid" >"$pid_file"
+
+          cleanup() {
+            if [ -f "$pid_file" ]; then
+              agent_pid="$(cat "$pid_file" 2>/dev/null || true)"
+              case "$agent_pid" in
+                ''|*[!0-9]*) ;;
+                *) kill "$agent_pid" >/dev/null 2>&1 || true ;;
+              esac
+            fi
+            kill "$victim_pid" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          ./scripts/start-monk-agent.sh
+          kill -0 "$victim_pid"
+          test "$(cat "$pid_file")" != "$victim_pid"
+
+          uninstall_dir="$RUNNER_TEMP/monk-stale-uninstall-bin"
+          uninstall_home="$RUNNER_TEMP/monk-stale-uninstall-home"
+          mkdir -p "$uninstall_dir" "$uninstall_home/agent/launcher/run"
+          cp "$MONK_AGENT_INSTALL_DIR/monk-agent" "$uninstall_dir/monk-agent"
+
+          sleep 300 &
+          uninstall_victim_pid="$!"
+          printf '%s\n' "$uninstall_victim_pid" >"$uninstall_home/agent/launcher/run/monk-agent.pid"
+          MONK_AGENT_INSTALL_DIR="$uninstall_dir" MONK_AGENT_HOME="$uninstall_home" \
+            ./scripts/uninstall-monk-agent.sh --yes --keep-data
+          kill -0 "$uninstall_victim_pid"
+          kill "$uninstall_victim_pid"
+          wait "$uninstall_victim_pid" 2>/dev/null || true
+          test ! -e "$uninstall_dir/monk-agent"
+
       - name: Run monk-agent status
         shell: bash
         env:

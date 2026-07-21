@@ -305,10 +305,35 @@ EOF
   launchctl kickstart -k "gui/$uid/$launchd_label" >/dev/null 2>&1 || true
 }
 
+is_managed_agent_pid() {
+  candidate_pid="$1"
+  case "$candidate_pid" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+
+  # PID files can outlive the process that created them. On Linux, verify the
+  # executable behind a reused PID before sending a signal; if identity cannot
+  # be proven, leave the process alone and let the new agent handle any bind
+  # conflict itself.
+  [ -L "/proc/$candidate_pid/exe" ] || return 1
+  running_exe="$(readlink "/proc/$candidate_pid/exe" 2>/dev/null || true)"
+  case "$running_exe" in
+    *' (deleted)') running_exe="${running_exe% (deleted)}" ;;
+  esac
+
+  expected_exe="$(readlink -f "$agent_path" 2>/dev/null || true)"
+  if [ -z "$expected_exe" ]; then
+    expected_dir="$(CDPATH= cd -- "$(dirname -- "$agent_path")" 2>/dev/null && pwd -P)" || return 1
+    expected_exe="$expected_dir/$(basename -- "$agent_path")"
+  fi
+
+  [ -n "$running_exe" ] && [ "$running_exe" = "$expected_exe" ]
+}
+
 start_with_background_process() {
   if [ -f "$pid_file" ]; then
     old_pid="$(cat "$pid_file" 2>/dev/null || true)"
-    if [ -n "$old_pid" ]; then
+    if is_managed_agent_pid "$old_pid"; then
       kill "$old_pid" >/dev/null 2>&1 || true
     fi
   fi
