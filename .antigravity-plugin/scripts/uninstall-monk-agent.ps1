@@ -87,6 +87,17 @@ function Get-WslDistros {
   }
 }
 
+function Assert-NativeCommandSucceeded {
+  param(
+    [string]$Operation,
+    [int]$ExitCode
+  )
+
+  if ($ExitCode -ne 0) {
+    throw "$Operation failed with exit code $ExitCode."
+  }
+}
+
 function Remove-MonkRuntime {
   $distros = @(Get-WslDistros)
   if (-not $distros.Length) {
@@ -108,6 +119,7 @@ function Remove-MonkRuntime {
   if ($distro -eq "Ubuntu-Monk") {
     wsl.exe --terminate Ubuntu-Monk 2>$null
     wsl.exe --unregister Ubuntu-Monk
+    Assert-NativeCommandSucceeded "Unregistering WSL distro 'Ubuntu-Monk'" $LASTEXITCODE
     return
   }
 
@@ -124,6 +136,7 @@ elif command -v dnf >/dev/null 2>&1 && rpm -q monk >/dev/null 2>&1; then
 fi
 '@
   wsl.exe -d $distro --user root -- sh -lc $script
+  Assert-NativeCommandSucceeded "Removing Monk runtime from WSL distro '$distro'" $LASTEXITCODE
 }
 
 Stop-ManagedAgent
