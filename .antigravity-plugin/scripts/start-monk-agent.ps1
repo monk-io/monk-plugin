@@ -18,6 +18,7 @@ $RunDir = Join-Path $DataDir "run"
 $LogOut = Join-Path $LogDir "monk-agent.out.log"
 $LogErr = Join-Path $LogDir "monk-agent.err.log"
 $PidFile = Join-Path $RunDir "monk-agent.pid"
+$PathFile = Join-Path $RunDir "monk-agent.path"
 $HealthUrl = "http://${AgentHost}:$Port/.well-known/oauth-protected-resource"
 
 New-Item -ItemType Directory -Force -Path $LogDir, $RunDir | Out-Null
@@ -172,19 +173,24 @@ try {
 }
 
 $ManagedAgentPath = Join-Path $InstallDir "monk-agent.exe"
-$AgentHashBefore = Get-FileSha256 $ManagedAgentPath
+$AgentHashBefore = ""
+$ManagedAgentEnsured = $false
+$CustomAgentPath = $false
 
 if ($env:MONK_AGENT_PATH) {
   $AgentPath = $env:MONK_AGENT_PATH
+  $CustomAgentPath = $true
 } elseif ($env:MONK_AGENT_SKIP_ENSURE -eq "1") {
   $AgentPath = $ManagedAgentPath
 } else {
+  $AgentHashBefore = Get-FileSha256 $ManagedAgentPath
   $EnsureScript = Join-Path $PluginRoot "scripts\ensure-monk-agent.ps1"
   if (-not (Test-Path $EnsureScript)) {
     Write-Error "monk-agent installer not found at $EnsureScript"
     exit 2
   }
   $AgentPath = (& $EnsureScript | Select-Object -Last 1)
+  $ManagedAgentEnsured = $true
 }
 
 $AgentPath = [string]$AgentPath
@@ -193,10 +199,23 @@ if (-not (Test-Path $AgentPath)) {
   exit 2
 }
 
-$AgentHashAfter = Get-FileSha256 $AgentPath
-$AgentUpdated = $AgentHashAfter -and ($AgentHashBefore -ne $AgentHashAfter)
+$AgentUpdated = $false
+if ($ManagedAgentEnsured) {
+  $AgentHashAfter = Get-FileSha256 $AgentPath
+  $AgentUpdated = $AgentHashAfter -and ($AgentHashBefore -ne $AgentHashAfter)
+}
 
-if (-not $AgentUpdated -and (Test-AgentRunning)) {
+function Test-AgentPathConfigured {
+  if (-not $CustomAgentPath) {
+    return $true
+  }
+  if (-not (Test-Path $PathFile)) {
+    return $false
+  }
+  return ((Get-Content -Raw $PathFile).Trim() -ieq $AgentPath)
+}
+
+if (-not $AgentUpdated -and (Test-AgentPathConfigured) -and (Test-AgentRunning)) {
   Show-SigninNudge
   exit 0
 }
@@ -221,6 +240,7 @@ $Process = Start-Process `
   -RedirectStandardError $LogErr
 
 $Process.Id | Set-Content -NoNewline $PidFile
+$AgentPath | Set-Content -NoNewline $PathFile
 
 for ($Attempt = 0; $Attempt -lt 180; $Attempt++) {
   if (Test-AgentRunning) {
