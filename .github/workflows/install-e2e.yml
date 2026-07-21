@@ -27,6 +27,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Test failed companion handling
+        run: ./tests/start-monk-agent-child-exit.sh
+
       - name: Install monk-agent
         shell: bash
         env:
