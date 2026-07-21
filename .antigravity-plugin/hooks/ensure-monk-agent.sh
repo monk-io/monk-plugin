@@ -18,10 +18,22 @@ is_running() {
   curl -fsS --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
 }
 
-# Fast path — already up
+# Fast path — already up. No telemetry here: this is a PreInvocation hook that
+# fires per model step, so emitting on the warm path would spam. The beacon
+# fires only on the cold-start paths below (install-needed / (re)start), which
+# is the meaningful "launcher started" signal for Antigravity.
 if is_running; then
   printf '%s\n' "{}"
   exit 0
+fi
+
+# Cold start — emit the earliest plugin_launcher_started beacon before doing any
+# work. Shared helper, best-effort; must never abort the hook. launch_client is
+# hardcoded because this hook is Antigravity-specific.
+telemetry_helper="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)/scripts/monk-launcher-telemetry.sh"
+if [ -f "$telemetry_helper" ]; then
+  . "$telemetry_helper"
+  monk_emit_launcher_event antigravity || true
 fi
 
 # Find the installed binary

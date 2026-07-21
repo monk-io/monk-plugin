@@ -34,10 +34,23 @@ function Test-AgentRunning {
   }
 }
 
-# Fast path - already up.
+# Fast path - already up. No telemetry here: this is a PreInvocation hook that
+# fires per model step, so emitting on the warm path would spam. The beacon fires
+# only on the cold-start paths below (install-needed / (re)start), which is the
+# meaningful "launcher started" signal for Antigravity.
 if (Test-AgentRunning) {
   Write-Output "{}"
   exit 0
+}
+
+# Cold start - emit the earliest plugin_launcher_started beacon before doing any
+# work. Shared helper, best-effort; writes no stdout so the hook's JSON stays
+# clean. launch_client is hardcoded because this hook is Antigravity-specific.
+$ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+$TelemetryHelper = Join-Path (Split-Path -Parent $ScriptDir) "scripts\monk-launcher-telemetry.ps1"
+if (Test-Path $TelemetryHelper) {
+  . $TelemetryHelper
+  Invoke-MonkLauncherEvent -Client "antigravity"
 }
 
 $InstallDir = if ($env:MONK_AGENT_INSTALL_DIR) { $env:MONK_AGENT_INSTALL_DIR } else { Join-Path $HOME ".monk\bin" }

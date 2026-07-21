@@ -93,7 +93,18 @@ stop_agent() {
       ''|*[!0-9]*) ;;
       *)
         if kill -0 "$pid" >/dev/null 2>&1; then
-          kill "$pid" >/dev/null 2>&1 || true
+          # Verify the process is actually monk-agent before killing to
+          # avoid terminating an unrelated process that reused the stale PID.
+          proc_name=""
+          if [ -f "/proc/$pid/comm" ]; then
+            proc_name="$(tr -d '\n' < "/proc/$pid/comm" 2>/dev/null || true)"
+          fi
+          if [ -z "$proc_name" ] && command -v ps >/dev/null 2>&1; then
+            proc_name="$(ps -p "$pid" -o comm= 2>/dev/null || true)"
+          fi
+          if [ -z "$proc_name" ] || [ "$proc_name" = "monk-agent" ]; then
+            kill "$pid" >/dev/null 2>&1 || true
+          fi
         fi
         ;;
     esac
