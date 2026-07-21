@@ -38,6 +38,19 @@ function Get-FileSha256 {
   return ([System.BitConverter]::ToString($Hash) -replace "-", "").ToLowerInvariant()
 }
 
+function Test-NonEmptyFile {
+  param([string]$Path)
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    return $false
+  }
+
+  try {
+    return ((Get-Item -LiteralPath $Path).Length -gt 0)
+  } catch {
+    return $false
+  }
+}
+
 function Stop-ManagedAgent {
   if (-not (Test-Path $PidFile)) {
     return
@@ -84,12 +97,12 @@ function Stop-ManagedAgent {
 
 if ($AutoUpdate -eq "0" -or $AutoUpdate -eq "false") {
   $Existing = Get-Command monk-agent.exe -ErrorAction SilentlyContinue
-  if ($Existing) {
+  if ($Existing -and (Test-NonEmptyFile $Existing.Source)) {
     Write-Output $Existing.Source
     exit 0
   }
 
-  if (Test-Path $Target) {
+  if (Test-NonEmptyFile $Target) {
     Write-Output $Target
     exit 0
   }
@@ -115,7 +128,7 @@ Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumTmp
 
 $Expected = ((Get-Content -Raw $ChecksumTmp).Trim() -split "\s+")[0].ToLowerInvariant()
 
-if ((Test-Path $Target) -and (Test-Path $ChecksumInstalled)) {
+if ((Test-NonEmptyFile $Target) -and (Test-Path $ChecksumInstalled)) {
   $Installed = ((Get-Content -Raw $ChecksumInstalled).Trim() -split "\s+")[0].ToLowerInvariant()
   if ($Installed -eq $Expected) {
     Remove-Item -Force $ChecksumTmp
@@ -140,6 +153,10 @@ New-Item -ItemType Directory -Force -Path $ExtractDir | Out-Null
 Expand-Archive -Force -Path $ArchiveTmp -DestinationPath $ExtractDir
 Stop-ManagedAgent
 Move-Item -Force (Join-Path $ExtractDir "monk-agent.exe") $Target
+if (-not (Test-NonEmptyFile $Target)) {
+  Write-Error "Downloaded monk-agent executable is empty or missing after extraction."
+  exit 1
+}
 "$Expected  $Artifact" | Set-Content -NoNewline $ChecksumInstalled
 Remove-Item -Recurse -Force $ExtractDir
 Remove-Item -Force $ArchiveTmp, $ChecksumTmp
