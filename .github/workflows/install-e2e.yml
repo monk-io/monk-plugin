@@ -38,6 +38,21 @@ jobs:
           test "$installed" = "$MONK_AGENT_INSTALL_DIR/monk-agent"
           test -x "$installed"
 
+      - name: Prefer managed agent when updates are disabled
+        shell: bash
+        env:
+          MONK_AGENT_INSTALL_DIR: ${{ runner.temp }}/monk-bin
+          MONK_AGENT_AUTO_UPDATE: "0"
+        run: |
+          set -euo pipefail
+          other_dir="$RUNNER_TEMP/other-monk-bin"
+          mkdir -p "$other_dir"
+          cp "$MONK_AGENT_INSTALL_DIR/monk-agent" "$other_dir/monk-agent"
+          export PATH="$other_dir:$PATH"
+
+          installed="$(./scripts/ensure-monk-agent.sh)"
+          test "$installed" = "$MONK_AGENT_INSTALL_DIR/monk-agent"
+
       - name: Run monk-agent status
         shell: bash
         env:
