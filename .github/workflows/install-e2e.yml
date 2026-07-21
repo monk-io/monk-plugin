@@ -78,6 +78,10 @@ jobs:
         shell: pwsh
         run: .\tests\start-monk-agent-readiness-timeout.ps1
 
+      - name: Test Windows uninstaller WSL failure handling
+        shell: pwsh
+        run: .\tests\uninstall-monk-agent-native-exit.ps1
+
       - name: Install monk-agent
         shell: pwsh
         env:
