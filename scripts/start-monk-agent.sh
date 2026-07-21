@@ -53,23 +53,28 @@ register_antigravity_mcp() {
   [ -d "$gemini_cfg" ] || return 0
   mcp_cfg="$gemini_cfg/mcp_config.json"
   server_url="http://$host:$port/mcp"
-  if [ -f "$mcp_cfg" ] && grep -q '"monk"' "$mcp_cfg" 2>/dev/null; then
-    return 0
-  fi
   # Treat an empty file the same as a missing file to avoid jq/python parse errors.
   has_existing=0
   if [ -f "$mcp_cfg" ] && [ -s "$mcp_cfg" ]; then
     has_existing=1
   fi
-  tmp="$(mktemp)"
   if command -v jq >/dev/null 2>&1; then
     if [ "$has_existing" = "1" ]; then
+      if jq -e '.mcpServers | objects | has("monk")' "$mcp_cfg" >/dev/null 2>&1; then
+        return 0
+      fi
+      tmp="$(mktemp)"
       jq --arg u "$server_url" '.mcpServers.monk = {serverUrl: $u}' "$mcp_cfg" >"$tmp"
     else
+      tmp="$(mktemp)"
       jq -n --arg u "$server_url" '{mcpServers: {monk: {serverUrl: $u}}}' >"$tmp"
     fi
   elif command -v python3 >/dev/null 2>&1; then
     if [ "$has_existing" = "1" ]; then
+      if python3 -c 'import json, sys; cfg = json.load(open(sys.argv[1])); servers = cfg.get("mcpServers"); sys.exit(0 if isinstance(servers, dict) and "monk" in servers else 1)' "$mcp_cfg"; then
+        return 0
+      fi
+      tmp="$(mktemp)"
       python3 -c "
 import json, sys
 cfg = json.load(open('$mcp_cfg'))
@@ -78,10 +83,10 @@ json.dump(cfg, sys.stdout, indent=2)
 print()
 " >"$tmp"
     else
+      tmp="$(mktemp)"
       printf '{"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >"$tmp"
     fi
   else
-    rm -f "$tmp"
     echo "Add monk to $mcp_cfg to enable Antigravity MCP (jq or python3 required to auto-write):" >&2
     printf '  {"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >&2
     return 0
