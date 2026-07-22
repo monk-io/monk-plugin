@@ -66,6 +66,10 @@ jobs:
         shell: pwsh
         run: .\tests\block-monk-windows.ps1
 
+      - name: Test Codex hook registration
+        shell: pwsh
+        run: .\tests\codex-hooks-windows.ps1
+
       - name: Install monk-agent
         shell: pwsh
         env:

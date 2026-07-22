@@ -11,6 +11,20 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${PLUGIN_ROOT}/hooks/block-monk.sh",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"${PLUGIN_ROOT}/hooks/block-monk.ps1\"",
+            "timeout": 5,
+            "statusMessage": "Checking Monk CLI guard"
+          }
+        ]
+      }
     ]
   }
 }
