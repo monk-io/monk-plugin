@@ -27,6 +27,7 @@ $RunDir = Join-Path $DataDir "run"
 $LogOut = Join-Path $LogDir "monk-agent.out.log"
 $LogErr = Join-Path $LogDir "monk-agent.err.log"
 $PidFile = Join-Path $RunDir "monk-agent.pid"
+$ConfigFile = Join-Path $RunDir "monk-agent.config"
 $HealthUrl = "http://${AgentHost}:$Port/.well-known/oauth-protected-resource"
 
 New-Item -ItemType Directory -Force -Path $LogDir, $RunDir | Out-Null
@@ -149,6 +150,29 @@ function Get-FileSha256 {
   return ([System.BitConverter]::ToString($Hash) -replace "-", "").ToLowerInvariant()
 }
 
+function Get-LauncherConfigFingerprint {
+  param([string]$AgentPath)
+
+  $Values = @(
+    $AgentPath,
+    $AgentHost,
+    $Port,
+    $AuthUrl,
+    $AuthClientId,
+    $AuthAudience,
+    $AutospinUrl,
+    $(if ($env:MONK_AGENT_LOCAL) { $env:MONK_AGENT_LOCAL } else { "" }),
+    $(if ($env:MONK_PLUGIN_VERSION) { $env:MONK_PLUGIN_VERSION } else { "" })
+  )
+  $Bytes = [Text.Encoding]::UTF8.GetBytes(($Values -join [char]0))
+  $Sha256 = [Security.Cryptography.SHA256]::Create()
+  try {
+    return ([BitConverter]::ToString($Sha256.ComputeHash($Bytes)) -replace "-", "").ToLowerInvariant()
+  } finally {
+    $Sha256.Dispose()
+  }
+}
+
 function Stop-ManagedAgent {
   if (-not (Test-Path $PidFile)) {
     return
@@ -243,8 +267,10 @@ if (-not (Test-Path $AgentPath)) {
 
 $AgentHashAfter = Get-FileSha256 $AgentPath
 $AgentUpdated = $AgentHashAfter -and ($AgentHashBefore -ne $AgentHashAfter)
+$LauncherConfigFingerprint = Get-LauncherConfigFingerprint -AgentPath $AgentPath
+$LauncherConfigMatches = (Test-Path $ConfigFile) -and ((Get-Content -Raw $ConfigFile).Trim() -eq $LauncherConfigFingerprint)
 
-if (-not $AgentUpdated -and (Test-AgentRunning)) {
+if (-not $AgentUpdated -and $LauncherConfigMatches -and (Test-AgentRunning)) {
   Show-SigninNudge
   exit 0
 }
@@ -273,6 +299,7 @@ $Process.Id | Set-Content -NoNewline $PidFile
 
 for ($Attempt = 0; $Attempt -lt 180; $Attempt++) {
   if (Test-AgentRunning) {
+    $LauncherConfigFingerprint | Set-Content -NoNewline $ConfigFile
     Show-SigninNudge
     exit 0
   }

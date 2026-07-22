@@ -27,6 +27,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Test launcher configuration changes
+        shell: bash
+        run: sh ./tests/start-monk-agent-config-change.sh
+
       - name: Install monk-agent
         shell: bash
         env:
@@ -65,6 +69,10 @@ jobs:
       - name: Test Windows block-monk fallbacks
         shell: pwsh
         run: .\tests\block-monk-windows.ps1
+
+      - name: Test launcher configuration changes
+        shell: pwsh
+        run: .\tests\start-monk-agent-config-change-windows.ps1
 
       - name: Install monk-agent
         shell: pwsh

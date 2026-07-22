@@ -38,6 +38,7 @@ log_dir="$data_dir/logs"
 run_dir="$data_dir/run"
 log_file="$log_dir/monk-agent.log"
 pid_file="$run_dir/monk-agent.pid"
+config_file="$run_dir/monk-agent.config"
 launchd_label="io.monk.agent"
 launchd_plist="$HOME/Library/LaunchAgents/$launchd_label.plist"
 
@@ -230,6 +231,27 @@ if [ -n "$agent_hash_after" ] && [ "$agent_hash_before" != "$agent_hash_after" ]
   agent_updated=1
 fi
 
+launcher_config_fingerprint() {
+  for value in \
+    "$agent_path" "$host" "$port" "$auth_url" "$auth_client_id" \
+    "$auth_audience" "$autospin_url" "${MONK_AGENT_LOCAL:-}" \
+    "${MONK_PLUGIN_VERSION:-}"
+  do
+    printf '%s:%s\n' "${#value}" "$value"
+  done | cksum | awk '{print $1 ":" $2}'
+}
+
+config_fingerprint="$(launcher_config_fingerprint)"
+launcher_configured() {
+  [ -f "$config_file" ] && [ "$(cat "$config_file" 2>/dev/null || true)" = "$config_fingerprint" ]
+}
+
+record_launcher_config() {
+  config_tmp="$config_file.tmp.$$"
+  printf '%s\n' "$config_fingerprint" >"$config_tmp"
+  mv "$config_tmp" "$config_file"
+}
+
 launchd_configured() {
   # Deliberately excludes PATH: it is derived from the invoking shell/app and
   # legitimately differs across hosts (Claude Code, VS Code, plain terminal) and
@@ -252,7 +274,7 @@ launchd_configured() {
 }
 
 if [ "${MONK_AGENT_SKIP_ENSURE:-0}" != "1" ]; then
-  if [ "$os" != "Darwin" ] && [ "$agent_updated" = "0" ] && is_running; then
+  if [ "$os" != "Darwin" ] && [ "$agent_updated" = "0" ] && launcher_configured && is_running; then
     register_antigravity_mcp
     emit_signin_nudge
     exit 0
@@ -371,6 +393,7 @@ esac
 tries=0
 while [ "$tries" -lt 180 ]; do
   if is_running; then
+    record_launcher_config
     register_antigravity_mcp
     emit_signin_nudge
     exit 0
