@@ -145,7 +145,8 @@ emit_signin_nudge() {
     attempt=$((attempt + 1))
     [ "$attempt" -lt 3 ] && sleep 1
   done
-  case "$body" in
+  compact_body="$(printf '%s' "$body" | tr -d '[:space:]')"
+  case "$compact_body" in
     *'"signedIn":true'*) return 0 ;;
   esac
   # Empty body = read error / 500 / timeout, NOT a confirmed signed-out state —
