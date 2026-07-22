@@ -56,6 +56,48 @@ function Test-AgentRunning {
   }
 }
 
+function Register-AntigravityMcp {
+  $ConfigDir = Join-Path $HOME ".gemini\config"
+  if (-not (Test-Path $ConfigDir)) { return }
+
+  $ConfigPath = Join-Path $ConfigDir "mcp_config.json"
+  $ServerUrl = "http://${AgentHost}:$Port/mcp"
+  if ((Test-Path $ConfigPath) -and (Get-Item $ConfigPath).Length) {
+    try {
+      $Config = Get-Content -Raw $ConfigPath | ConvertFrom-Json
+    } catch {
+      Write-Warning "Could not register Monk MCP server because $ConfigPath is not valid JSON."
+      return
+    }
+    if ($null -eq $Config -or $Config.GetType().FullName -ne "System.Management.Automation.PSCustomObject") {
+      Write-Warning "Could not register Monk MCP server because $ConfigPath is not a JSON object."
+      return
+    }
+  } else {
+    $Config = [pscustomobject]@{}
+  }
+  if ($null -eq $Config.mcpServers -or $Config.mcpServers.GetType().FullName -ne "System.Management.Automation.PSCustomObject") {
+    Add-Member -InputObject $Config -NotePropertyName mcpServers -NotePropertyValue ([pscustomobject]@{}) -Force
+  }
+  if ($Config.mcpServers.PSObject.Properties.Name -contains "monk") {
+    if ($Config.mcpServers.monk.serverUrl -eq $ServerUrl) { return }
+    if ($null -ne $Config.mcpServers.monk -and $Config.mcpServers.monk.GetType().FullName -eq "System.Management.Automation.PSCustomObject") {
+      Add-Member -InputObject $Config.mcpServers.monk -NotePropertyName serverUrl -NotePropertyValue $ServerUrl -Force
+    } else {
+      $Config.mcpServers.monk = [pscustomobject]@{ serverUrl = $ServerUrl }
+    }
+  } else {
+    Add-Member -InputObject $Config.mcpServers -NotePropertyName monk -NotePropertyValue ([pscustomobject]@{ serverUrl = $ServerUrl })
+  }
+  $TempPath = "$ConfigPath.tmp-$PID"
+  try {
+    $Config | ConvertTo-Json -Depth 20 | Set-Content -Encoding UTF8 $TempPath
+    Move-Item -Force $TempPath $ConfigPath
+  } finally {
+    Remove-Item -Force $TempPath -ErrorAction SilentlyContinue
+  }
+}
+
 # If the agent is up but the user is not signed in to Monk, print SessionStart
 # context telling the host agent to prompt the user to sign in via /mcp. Without
 # this the host only sees "tools unavailable" and mis-reports it as a connection
@@ -245,6 +287,7 @@ $AgentHashAfter = Get-FileSha256 $AgentPath
 $AgentUpdated = $AgentHashAfter -and ($AgentHashBefore -ne $AgentHashAfter)
 
 if (-not $AgentUpdated -and (Test-AgentRunning)) {
+  Register-AntigravityMcp
   Show-SigninNudge
   exit 0
 }
@@ -273,6 +316,7 @@ $Process.Id | Set-Content -NoNewline $PidFile
 
 for ($Attempt = 0; $Attempt -lt 180; $Attempt++) {
   if (Test-AgentRunning) {
+    Register-AntigravityMcp
     Show-SigninNudge
     exit 0
   }
