@@ -80,19 +80,39 @@ $env:MONK_AGENT_AUTH_CLIENT_ID = if ($env:MONK_AGENT_AUTH_CLIENT_ID) { $env:MONK
 $env:MONK_AUTH_AUDIENCE = if ($env:MONK_AUTH_AUDIENCE) { $env:MONK_AUTH_AUDIENCE } else { "oaknode.com" }
 $env:MONK_AUTOSPIN_URL = if ($env:MONK_AUTOSPIN_URL) { $env:MONK_AUTOSPIN_URL } else { "wss://api.app.monk.io/autospin/" }
 
+$Process = $null
 try {
-  Start-Process `
+  $Process = Start-Process `
     -FilePath $AgentPath `
     -ArgumentList @("serve", "--host", $AgentHost, "--port", $Port) `
     -WindowStyle Hidden `
     -RedirectStandardOutput $LogOut `
-    -RedirectStandardError $LogErr | Out-Null
+    -RedirectStandardError $LogErr `
+    -PassThru
 } catch {
+}
+
+# Wait briefly for the agent to become reachable. If the process exits early or
+# the health endpoint never responds, report an attempted start with a pointer
+# to the logs instead of a false "has been started".
+if ($Process -and -not $Process.HasExited) {
+  for ($i = 0; $i -lt 10; $i++) {
+    Start-Sleep -Seconds 1
+    if ($Process.HasExited) { break }
+    if (Test-AgentRunning) {
+      Write-Json @{
+        injectSteps = @(
+          @{ ephemeralMessage = "monk-agent was not running and has been started. It may take a few seconds to initialize - use monk.install.status or monk.runtime.status to check readiness before issuing Monk operations." }
+        )
+      }
+      exit 0
+    }
+  }
 }
 
 Write-Json @{
   injectSteps = @(
-    @{ ephemeralMessage = "monk-agent was not running and has been started. It may take a few seconds to initialize - use monk.install.status or monk.runtime.status to check readiness before issuing Monk operations." }
+    @{ ephemeralMessage = "monk-agent was started but did not become ready within 10 seconds. Check monk.install.status or monk.runtime.status for details, or the launcher logs under $LogDir." }
   )
 }
 exit 0

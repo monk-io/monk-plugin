@@ -94,6 +94,8 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.cluster.grow`
 - `monk.cluster.peer.remove`
 - `monk.cluster.peer.tag`
+- `monk.cluster.peer.set_certificate`
+- `monk.cluster.peer.reset_certificate`
 - `monk.cluster.delete`
 - `monk.cluster.exit`
 - `monk.cluster.provider.ensure`
@@ -102,6 +104,9 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.cluster.estimate`
 - `monk.cluster.ingress.status`
 - `monk.cluster.ingress.ensure`
+- `monk.cluster.ingress.list_certificates`
+- `monk.cluster.ingress.set_certificate`
+- `monk.cluster.ingress.reset_certificate`
 - `monk.cluster.registry.status`
 - `monk.cluster.registry.ensure`
 - `monk.cluster.registry.reset`

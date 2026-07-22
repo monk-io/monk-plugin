@@ -1,6 +1,6 @@
 # Monk plugin for AI coding agents
 
-> ### 🐬 Bug bounty: July 17–August 1, 2026
+> ### 🐬 Bug bounty: July 17–August 10, 2026
 >
 > This plugin is new and we want it proven in anger. Install it, take a real
 > app through build, deploy, and operate, and file what breaks as issues on
@@ -137,7 +137,7 @@ runtime:
 - The Monk CLI and daemon (`monk`, `monkd`) are installed or upgraded with
   your package manager: Homebrew on macOS, apt or dnf on Linux, and a
   dedicated Ubuntu WSL distro on Windows.
-- This plugin requires monkd v3.20.10 or newer and prompts to
+- This plugin requires monkd v3.21.1 or newer and prompts to
   upgrade older installs.
 
 To remove everything later:
