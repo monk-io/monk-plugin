@@ -38,6 +38,10 @@ jobs:
           test "$installed" = "$MONK_AGENT_INSTALL_DIR/monk-agent"
           test -x "$installed"
 
+      - name: Verify launcher health resource identity
+        shell: bash
+        run: sh tests/start-monk-agent-health-identity.sh
+
       - name: Run monk-agent status
         shell: bash
         env:
@@ -79,6 +83,10 @@ jobs:
           if (-not (Test-Path $installed)) {
             throw "monk-agent.exe was not installed"
           }
+
+      - name: Verify launcher health resource identity
+        shell: pwsh
+        run: .\tests\start-monk-agent-health-identity.ps1 -AgentPath "$env:RUNNER_TEMP\monk-bin\monk-agent.exe"
 
       - name: Run monk-agent status
         shell: pwsh

@@ -60,6 +60,7 @@ fi
 ide_version="${CURSOR_VERSION:-}"
 
 health_url="http://$host:$port/.well-known/oauth-protected-resource"
+health_resource="http://$host:$port/mcp"
 
 # Register monk in Antigravity's global MCP config if ~/.gemini/config/ exists.
 # Idempotent — skips if already registered. Uses jq when available; prints
@@ -168,15 +169,16 @@ emit_signin_nudge() {
 }
 
 is_running() {
+  response=""
   if command -v curl >/dev/null 2>&1; then
-    curl -fsS --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
-    return $?
+    response="$(curl -fsS --max-time 2 "$health_url" 2>/dev/null)" || return 1
+  elif command -v wget >/dev/null 2>&1; then
+    response="$(wget -q -T 2 -O - "$health_url" 2>/dev/null)" || return 1
+  else
+    return 1
   fi
-  if command -v wget >/dev/null 2>&1; then
-    wget -q -T 2 -O - "$health_url" 2>/dev/null | grep -q '"resource"'
-    return $?
-  fi
-  return 1
+  resource="$(printf '%s\n' "$response" | sed -n 's/.*"resource"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+  [ "$resource" = "$health_resource" ]
 }
 
 hash_file() {
