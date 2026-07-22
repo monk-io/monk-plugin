@@ -66,6 +66,10 @@ jobs:
         shell: pwsh
         run: .\tests\block-monk-windows.ps1
 
+      - name: Test Windows launcher mutex timeout
+        shell: pwsh
+        run: .\tests\start-monk-agent-mutex-timeout.ps1
+
       - name: Install monk-agent
         shell: pwsh
         env:
