@@ -19,6 +19,7 @@ if (Get-Command bash -ErrorAction SilentlyContinue) { exit 0 }
 $Port = if ($env:MONK_AGENT_PORT) { $env:MONK_AGENT_PORT } else { "7419" }
 $AgentHost = if ($env:MONK_AGENT_HOST) { $env:MONK_AGENT_HOST } else { "127.0.0.1" }
 $HealthUrl = "http://${AgentHost}:$Port/.well-known/oauth-protected-resource"
+$HealthResource = "http://${AgentHost}:$Port/mcp"
 
 function Write-Json {
   param([object]$Object)
@@ -28,7 +29,8 @@ function Write-Json {
 function Test-AgentRunning {
   try {
     $Response = Invoke-WebRequest -Uri $HealthUrl -UseBasicParsing -TimeoutSec 2
-    return $Response.Content -match '"resource"'
+    $Document = $Response.Content | ConvertFrom-Json -ErrorAction Stop
+    return [string]$Document.resource -ceq $HealthResource
   } catch {
     return $false
   }
