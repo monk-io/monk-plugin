@@ -29,6 +29,9 @@ $AgentDataDir = Join-Path $MonkHome "agent"
 $PidFile = Join-Path $AgentDataDir "launcher\run\monk-agent.pid"
 $Target = Join-Path $InstallDir "monk-agent.exe"
 $Checksum = Join-Path $InstallDir "monk-agent.sha256"
+$AntigravityMcpConfig = if ($env:MONK_ANTIGRAVITY_CONFIG) { $env:MONK_ANTIGRAVITY_CONFIG } else {
+  Join-Path $HOME ".gemini\config\mcp_config.json"
+}
 
 if (-not $Yes) {
   $suffix = if ($Runtime) { " and Monk runtime" } else { "" }
@@ -135,10 +138,53 @@ fi
   wsl.exe -d $distro --user root -- sh -lc $script
 }
 
+function Remove-AntigravityMcpRegistration {
+  if (-not (Test-Path -LiteralPath $AntigravityMcpConfig -PathType Leaf)) {
+    return
+  }
+
+  try {
+    $Config = Get-Content -LiteralPath $AntigravityMcpConfig -Raw | ConvertFrom-Json
+  } catch {
+    Write-Warning "Leaving malformed Antigravity MCP config unchanged: $AntigravityMcpConfig"
+    return
+  }
+
+  if ($null -eq $Config) {
+    return
+  }
+  $ServersProperty = $Config.PSObject.Properties["mcpServers"]
+  if ($null -eq $ServersProperty -or $null -eq $ServersProperty.Value) {
+    return
+  }
+  $MonkProperty = $ServersProperty.Value.PSObject.Properties["monk"]
+  if ($null -eq $MonkProperty) {
+    return
+  }
+
+  $ServersProperty.Value.PSObject.Properties.Remove("monk")
+  if (@($ServersProperty.Value.PSObject.Properties).Count -eq 0) {
+    $Config.PSObject.Properties.Remove("mcpServers")
+  }
+
+  $Directory = Split-Path -Parent $AntigravityMcpConfig
+  $TempPath = Join-Path $Directory (".monk-mcp-config-{0}.tmp" -f [guid]::NewGuid())
+  try {
+    $Json = $Config | ConvertTo-Json -Depth 100
+    [IO.File]::WriteAllText($TempPath, $Json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+    Move-Item -LiteralPath $TempPath -Destination $AntigravityMcpConfig -Force
+    Write-Host "Removed Monk MCP registration from $AntigravityMcpConfig"
+  } catch {
+    Remove-Item -LiteralPath $TempPath -Force -ErrorAction SilentlyContinue
+    Write-Warning "Could not update Antigravity MCP config: $AntigravityMcpConfig"
+  }
+}
+
 Stop-ManagedAgent
 Remove-AgentFiles
 if ($Runtime) {
   Remove-MonkRuntime
 }
+Remove-AntigravityMcpRegistration
 
 Write-Host "monk-agent uninstall complete."
