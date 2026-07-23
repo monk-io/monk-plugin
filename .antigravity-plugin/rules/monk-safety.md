@@ -14,8 +14,8 @@ needed.
 
 - Cloud deploys, destructive actions, workload shells, and credential changes require approval
   through `monk-agent`.
-- Cluster creation, grow, shrink, peer removal, peer retagging, registry changes, exit, and delete
-  must go through `monk.cluster.*` tools.
+- Cluster creation, grow, peer removal, peer retagging, registry changes, exit, and delete must go
+  through `monk.cluster.*` tools.
 - Never target Monk-managed `system/*` workloads.
 
 ## Secrets

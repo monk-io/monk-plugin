@@ -19,14 +19,43 @@ esac
 health_url="http://$url_host:$port/.well-known/oauth-protected-resource"
 
 is_running() {
-  command -v curl >/dev/null 2>&1 || return 1
-  curl -fsS --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
+    return $?
+  fi
+  if command -v wget >/dev/null 2>&1; then
+    wget -q -T 2 -O - "$health_url" 2>/dev/null | grep -q '"resource"'
+    return $?
+  fi
+  return 1
 }
 
-# Fast path — already up
+# Emit an Antigravity injectSteps payload carrying a single ephemeral message.
+# jq is not guaranteed to be installed — when it was missing this hook exited
+# 127 and injected nothing at all — so encode the JSON string ourselves,
+# escaping the backslashes and double quotes that can appear in the embedded
+# filesystem paths. The messages are otherwise single-line and control-free.
+emit_inject_steps() {
+  escaped=$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+  printf '%s\n' "{\"injectSteps\":[{\"ephemeralMessage\":\"$escaped\"}]}"
+}
+
+# Fast path — already up. No telemetry here: this is a PreInvocation hook that
+# fires per model step, so emitting on the warm path would spam. The beacon
+# fires only on the cold-start paths below (install-needed / (re)start), which
+# is the meaningful "launcher started" signal for Antigravity.
 if is_running; then
   printf '%s\n' "{}"
   exit 0
+fi
+
+# Cold start — emit the earliest plugin_launcher_started beacon before doing any
+# work. Shared helper, best-effort; must never abort the hook. launch_client is
+# hardcoded because this hook is Antigravity-specific.
+telemetry_helper="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)/scripts/monk-launcher-telemetry.sh"
+if [ -f "$telemetry_helper" ]; then
+  . "$telemetry_helper"
+  monk_emit_launcher_event antigravity || true
 fi
 
 # Find the installed binary
@@ -34,11 +63,7 @@ agent_path="${MONK_AGENT_PATH:-${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk
 
 if [ ! -x "$agent_path" ]; then
   plugin_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-  jq -n --arg script "$plugin_dir/scripts/start-monk-agent.sh" '{
-    injectSteps: [{
-      ephemeralMessage: ("monk-agent is not installed. Run `" + $script + "` once to install and start it, then continue.")
-    }]
-  }'
+  emit_inject_steps "monk-agent is not installed. Run \`$plugin_dir/scripts/start-monk-agent.sh\` once to install and start it, then continue."
   exit 0
 fi
 
@@ -59,9 +84,22 @@ elif command -v nohup >/dev/null 2>&1; then
 else
   "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &
 fi
+agent_pid=$!
 
-jq -n '{
-  injectSteps: [{
-    ephemeralMessage: "monk-agent was not running and has been started. It may take a few seconds to initialize — use monk.install.status or monk.runtime.status to check readiness before issuing Monk operations."
-  }]
-}'
+# Wait briefly for the agent to become reachable. If the process exits early or
+# the health endpoint never responds, report an attempted start with a pointer
+# to the logs instead of a false "has been started".
+i=0
+while [ "$i" -lt 10 ]; do
+  sleep 1
+  if ! kill -0 "$agent_pid" 2>/dev/null; then
+    break
+  fi
+  if is_running; then
+    emit_inject_steps "monk-agent was not running and has been started. It may take a few seconds to initialize — use monk.install.status or monk.runtime.status to check readiness before issuing Monk operations."
+    exit 0
+  fi
+  i=$((i + 1))
+done
+
+emit_inject_steps "monk-agent was started but did not become ready within 10 seconds. Check monk.install.status or monk.runtime.status for details, or the launcher logs under $log_dir."

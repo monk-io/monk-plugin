@@ -48,7 +48,16 @@ function Stop-ManagedAgent {
     return
   }
 
-  $OldProcess = Get-Process -Id ([int]$RawPid) -ErrorAction SilentlyContinue
+  # Validate the PID is numeric before casting; a malformed PID file (text,
+  # whitespace, BOM artifacts) would otherwise throw a terminating error under
+  # ErrorActionPreference = "Stop". Treat non-numeric content as stale state.
+  $ParsedPid = 0
+  if (-not [int]::TryParse($RawPid, [ref]$ParsedPid) -or $ParsedPid -le 0) {
+    Remove-Item -Force $PidFile -ErrorAction SilentlyContinue
+    return
+  }
+
+  $OldProcess = Get-Process -Id $ParsedPid -ErrorAction SilentlyContinue
   if (-not $OldProcess) {
     Remove-Item -Force $PidFile -ErrorAction SilentlyContinue
     return

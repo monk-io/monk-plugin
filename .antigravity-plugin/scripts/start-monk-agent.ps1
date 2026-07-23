@@ -12,6 +12,15 @@ $PluginRoot = if ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { Sp
 $InstallDir = if ($env:MONK_AGENT_INSTALL_DIR) { $env:MONK_AGENT_INSTALL_DIR } else { Join-Path $HOME ".monk\bin" }
 $MonkHome = if ($env:MONK_AGENT_HOME) { $env:MONK_AGENT_HOME } else { Join-Path $HOME ".monk" }
 
+# Rendered at plugin build time; sets $env:MONK_PLUGIN_VERSION so both the
+# launcher telemetry beacon (below) and the spawned agent can report the real
+# plugin version. Guarded: an older rendered plugin without the file must still
+# launch (the agent falls back to a labeled agent-binary version). Dot-sourced
+# early so the value is set before the telemetry emit and the agent spawn. The
+# PowerShell counterpart of the plugin-version.sh source in start-monk-agent.sh.
+$PluginVersionScript = Join-Path $ScriptDir "plugin-version.ps1"
+if (Test-Path $PluginVersionScript) { . $PluginVersionScript }
+
 $DataDir = Join-Path $MonkHome "agent\launcher"
 $LogDir = Join-Path $DataDir "logs"
 $RunDir = Join-Path $DataDir "run"
@@ -27,6 +36,22 @@ $BaseUrl = "http://${UrlHost}:$Port"
 $HealthUrl = "$BaseUrl/.well-known/oauth-protected-resource"
 
 New-Item -ItemType Directory -Force -Path $LogDir, $RunDir | Out-Null
+
+# Client whose hook fired this launcher. Order matters: Cursor sets
+# CLAUDE_PLUGIN_ROOT as a Claude-compat shim (verified, see
+# docs/plugin-hooks-per-client.md), so it MUST be detected via CURSOR_* before
+# the CLAUDE_PLUGIN_ROOT check or it is misreported as claude-code. Used by the
+# launcher telemetry event, the MONK_AGENT_LAUNCH_CLIENT hand-off, and the nudge.
+$Client = if ($env:CURSOR_VERSION -or $env:CURSOR_PLUGIN_ROOT) {
+  "cursor"
+} elseif ($env:CLAUDE_PLUGIN_ROOT) {
+  "claude-code"
+} elseif ($env:PLUGIN_ROOT) {
+  "codex"
+} else {
+  "unknown"
+}
+$IdeVersion = if ($env:CURSOR_VERSION) { $env:CURSOR_VERSION } else { "" }
 
 function Test-AgentRunning {
   try {
@@ -94,7 +119,7 @@ function Show-SigninNudge {
   if ($Auth.signedIn) {
     return
   }
-  $Client = if ($env:CLAUDE_PLUGIN_ROOT) { "claude-code" } elseif ($env:PLUGIN_ROOT) { "codex" } else { "unknown" }
+  # $Client is resolved once at the top of the script (Cursor-aware ordering).
   try {
     Invoke-RestMethod -Uri "$BaseUrl/plugin/nudge?type=signin&client=$Client" -Method Post -TimeoutSec 2 | Out-Null
   } catch {
@@ -140,7 +165,16 @@ function Stop-ManagedAgent {
     return
   }
 
-  $OldProcess = Get-Process -Id ([int]$RawPid) -ErrorAction SilentlyContinue
+  # Validate the PID is numeric before casting; a malformed PID file (text,
+  # whitespace, BOM artifacts) would otherwise throw a terminating error under
+  # ErrorActionPreference = "Stop". Treat non-numeric content as stale state.
+  $ParsedPid = 0
+  if (-not [int]::TryParse($RawPid, [ref]$ParsedPid) -or $ParsedPid -le 0) {
+    Remove-Item -Force $PidFile -ErrorAction SilentlyContinue
+    return
+  }
+
+  $OldProcess = Get-Process -Id $ParsedPid -ErrorAction SilentlyContinue
   if (-not $OldProcess) {
     return
   }
@@ -162,6 +196,16 @@ function Stop-ManagedAgent {
   }
 }
 
+# Earliest telemetry signal: the plugin_launcher_started beacon lives in a shared,
+# dot-sourced helper (monk-launcher-telemetry.ps1) reused by the Antigravity hook.
+# Guarded on presence for older rendered plugins. Invoked below under the launcher
+# mutex so the per-session dedup marker is race-free against the .ps1/.sh
+# double-fire. Best-effort inside its own try/catch — never aborts the launch.
+$TelemetryHelper = Join-Path $ScriptDir "monk-launcher-telemetry.ps1"
+if (Test-Path $TelemetryHelper) {
+  . $TelemetryHelper
+}
+
 # Single-instance guard. On Windows-with-bash, Claude Code fires BOTH SessionStart
 # entries: this .ps1 directly, and start-monk-agent.sh which on MINGW/MSYS/CYGWIN
 # re-execs this same .ps1. On a cold start (agent down) the two launchers would
@@ -179,6 +223,10 @@ try {
 
 $ManagedAgentPath = Join-Path $InstallDir "monk-agent.exe"
 $AgentHashBefore = Get-FileSha256 $ManagedAgentPath
+
+if (Get-Command Invoke-MonkLauncherEvent -ErrorAction SilentlyContinue) {
+  Invoke-MonkLauncherEvent -Client $Client -IdeVersion $IdeVersion
+}
 
 if ($env:MONK_AGENT_PATH) {
   $AgentPath = $env:MONK_AGENT_PATH
@@ -213,6 +261,7 @@ $env:MONK_AUTH_URL = $AuthUrl
 $env:MONK_AGENT_AUTH_CLIENT_ID = $AuthClientId
 $env:MONK_AUTH_AUDIENCE = $AuthAudience
 $env:MONK_AUTOSPIN_URL = $AutospinUrl
+$env:MONK_AGENT_LAUNCH_CLIENT = $Client
 if ($env:PATH -notlike "*$InstallDir*") {
   $env:PATH = "$InstallDir;$env:PATH"
 }

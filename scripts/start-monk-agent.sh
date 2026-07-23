@@ -43,6 +43,22 @@ launchd_plist="$HOME/Library/LaunchAgents/$launchd_label.plist"
 
 mkdir -p "$log_dir" "$run_dir"
 
+# Client whose hook fired this launcher. Order matters: Cursor sets
+# CLAUDE_PLUGIN_ROOT as a Claude-compat shim (verified, see
+# docs/plugin-hooks-per-client.md), so it MUST be detected via CURSOR_* before
+# the CLAUDE_PLUGIN_ROOT check or it is misreported as claude-code. Used by the
+# launcher telemetry event, the MONK_AGENT_LAUNCH_CLIENT hand-off to the agent,
+# and the signin nudge.
+client="unknown"
+if [ -n "${CURSOR_VERSION:-}" ] || [ -n "${CURSOR_PLUGIN_ROOT:-}" ]; then
+  client="cursor"
+elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+  client="claude-code"
+elif [ -n "${PLUGIN_ROOT:-}" ]; then
+  client="codex"
+fi
+ide_version="${CURSOR_VERSION:-}"
+
 url_host="$host"
 case "$url_host" in
   \[*\]) ;;
@@ -79,7 +95,11 @@ register_antigravity_mcp() {
       python3 -c "
 import json, sys
 cfg = json.load(open('$mcp_cfg'))
-cfg.setdefault('mcpServers', {})['monk'] = {'serverUrl': '$server_url'}
+servers = cfg.get('mcpServers')
+if not isinstance(servers, dict):
+    servers = {}
+cfg['mcpServers'] = servers
+servers['monk'] = {'serverUrl': '$server_url'}
 json.dump(cfg, sys.stdout, indent=2)
 print()
 " >"$tmp"
@@ -137,12 +157,7 @@ emit_signin_nudge() {
   # Empty body = read error / 500 / timeout, NOT a confirmed signed-out state —
   # suppress the nudge. Only an affirmative signedIn:false reaches the nudge below.
   [ -n "$body" ] || return 0
-  client="unknown"
-  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
-    client="claude-code"
-  elif [ -n "${PLUGIN_ROOT:-}" ]; then
-    client="codex"
-  fi
+  # $client is resolved once at the top of the script (Cursor-aware ordering).
   nudge_url="$base_url/plugin/nudge?type=signin&client=$client"
   if command -v curl >/dev/null 2>&1; then
     curl -fsS --max-time 2 -X POST "$nudge_url" >/dev/null 2>&1 || true
@@ -190,6 +205,17 @@ hash_file() {
 os="$(uname -s)"
 managed_agent_path="${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent"
 agent_hash_before="$(hash_file "$managed_agent_path")"
+
+# Earliest telemetry signal: fire a plugin_launcher_started beacon straight to
+# PostHog BEFORE ensure/health-check/serve, so plugin activity is visible even if
+# the download fails or the agent crashes on init. The beacon lives in a shared,
+# sourced helper (monk-launcher-telemetry.sh) reused by the Antigravity hook, so
+# the logic stays in one place. Guarded on presence for older rendered plugins
+# and invoked with `|| true` — a failure here must never abort the launch.
+if [ -f "$script_dir/monk-launcher-telemetry.sh" ]; then
+  . "$script_dir/monk-launcher-telemetry.sh"
+  monk_emit_launcher_event "$client" "$ide_version" || true
+fi
 
 if [ -n "${MONK_AGENT_PATH:-}" ]; then
   agent_path="$MONK_AGENT_PATH"
@@ -265,8 +291,20 @@ start_with_launchd() {
   </array>
   <key>RunAtLoad</key>
   <true/>
+  <!-- Respawn on crashes/non-zero exits, but NOT on a clean exit 0. The agent
+       exits 0 when it finds another healthy monk-agent already on the port
+       (see handlePortConflict) so a lost bind race defers instead of hot-looping;
+       a foreign process holding the port exits non-zero and is retried, throttled. -->
   <key>KeepAlive</key>
-  <true/>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <!-- launchd's default throttle floor is 10s; widen it so an unrecoverable
+       failure (e.g. a foreign process pinning the port) costs ~1 relaunch/min
+       instead of ~6, while still self-healing once the port frees. -->
+  <key>ThrottleInterval</key>
+  <integer>60</integer>
   <key>EnvironmentVariables</key>
   <dict>
     <key>MONK_AUTH_URL</key>
@@ -281,6 +319,12 @@ start_with_launchd() {
     <string>${MONK_AGENT_LOCAL:-}</string>
     <key>MONK_PLUGIN_VERSION</key>
     <string>${MONK_PLUGIN_VERSION:-}</string>
+    <!-- Deliberately NOT gated in launchd_configured(): the launching client
+         legitimately differs per session, and gating a restart on it would
+         reintroduce the per-session churn the PATH exclusion comment warns
+         about. On macOS this reflects the client of the last real (re)start. -->
+    <key>MONK_AGENT_LAUNCH_CLIENT</key>
+    <string>$client</string>
     <key>PATH</key>
     <string>$agent_path_env</string>
   </dict>
@@ -313,6 +357,7 @@ start_with_background_process() {
   export PATH="$agent_path_env"
   export MONK_AGENT_LOCAL="${MONK_AGENT_LOCAL:-}"
   export MONK_PLUGIN_VERSION="${MONK_PLUGIN_VERSION:-}"
+  export MONK_AGENT_LAUNCH_CLIENT="$client"
   if command -v setsid >/dev/null 2>&1; then
     setsid "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &
   elif command -v nohup >/dev/null 2>&1; then
@@ -335,6 +380,13 @@ while [ "$tries" -lt 180 ]; do
     register_antigravity_mcp
     emit_signin_nudge
     exit 0
+  fi
+  # Break early if the background process has exited -- no point waiting 180s.
+  if [ -f "$pid_file" ]; then
+    _pid="$(cat "$pid_file" 2>/dev/null || true)"
+    if [ -n "$_pid" ] && ! kill -0 "$_pid" 2>/dev/null; then
+      break
+    fi
   fi
   tries=$((tries + 1))
   sleep 1

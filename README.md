@@ -1,6 +1,6 @@
 # Monk plugin for AI coding agents
 
-> ### 🐬 Bug bounty: July 13–27, 2026
+> ### 🐬 Bug bounty: July 17–August 10, 2026
 >
 > This plugin is new and we want it proven in anger. Install it, take a real
 > app through build, deploy, and operate, and file what breaks as issues on
@@ -57,7 +57,7 @@ Or, pointing directly at the plugin repo:
 ### OpenAI Codex
 
 ```text
-codex marketplace add monk-io/monk-plugin
+codex plugin marketplace add monk-io/monk-plugin
 ```
 
 Then start `codex`, run `/plugins`, open the `monk-plugins` marketplace, and
@@ -119,6 +119,11 @@ during the bounty every valid report earns points toward the
 One bug per issue. Duplicates are merged into the first report. Feature
 requests and content about your run (blog, stream, tweet) earn points too —
 open a regular issue with the details or the link.
+
+To be scored you need a Monk account — sign in at [monk.io](https://monk.io)
+with the same GitHub account you file from — and findings should come from
+actually using the product. Reports without a linked account, and findings
+from pure code analysis, are welcome but won't earn points.
 **Security and data-loss findings go to security@monk.io** — please don't
 post exploitable details publicly.
 
@@ -132,7 +137,7 @@ runtime:
 - The Monk CLI and daemon (`monk`, `monkd`) are installed or upgraded with
   your package manager: Homebrew on macOS, apt or dnf on Linux, and a
   dedicated Ubuntu WSL distro on Windows.
-- This plugin requires monkd v3.20.10 or newer and prompts to
+- This plugin requires monkd v3.21.1 or newer and prompts to
   upgrade older installs.
 
 To remove everything later:
