@@ -111,7 +111,28 @@ $ChecksumTmp = Join-Path $InstallDir ".monk-agent.tmp.sha256"
 $ExtractDir = Join-Path $InstallDir ".monk-agent.extract"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
-Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumTmp
+try {
+  Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumTmp
+} catch {
+  $Installed = ""
+  if ((Test-Path $Target) -and (Test-Path $ChecksumInstalled)) {
+    try {
+      $Installed = ((Get-Content -Raw $ChecksumInstalled).Trim() -split "\s+")[0].ToLowerInvariant()
+    } catch {
+      $Installed = ""
+    }
+  }
+
+  $TargetSize = if (Test-Path $Target) { (Get-Item $Target).Length } else { 0 }
+  if ($TargetSize -gt 0 -and $Installed -match "^[0-9a-f]{64}$") {
+    Remove-Item -Force $ChecksumTmp -ErrorAction SilentlyContinue
+    Write-Warning "Unable to check for monk-agent updates; using the previously checksummed installation at $Target."
+    Write-Output $Target
+    exit 0
+  }
+
+  throw
+}
 
 $Expected = ((Get-Content -Raw $ChecksumTmp).Trim() -split "\s+")[0].ToLowerInvariant()
 

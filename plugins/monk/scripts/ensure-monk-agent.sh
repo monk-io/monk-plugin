@@ -51,13 +51,34 @@ if [ "$auto_update" = "0" ] || [ "$auto_update" = "false" ]; then
   fi
 fi
 
-if command -v curl >/dev/null 2>&1; then
-  curl -fL "$checksum_url" -o "$checksum_tmp"
-elif command -v wget >/dev/null 2>&1; then
-  wget -O "$checksum_tmp" "$checksum_url"
-else
-  echo "curl or wget is required to install monk-agent." >&2
-  exit 2
+download_checksum() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fL "$checksum_url" -o "$checksum_tmp"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -O "$checksum_tmp" "$checksum_url"
+  else
+    echo "curl or wget is required to check for monk-agent updates." >&2
+    return 2
+  fi
+}
+
+if ! download_checksum; then
+  if [ -x "$target" ] && [ -s "$target" ] && [ -f "$checksum_installed" ]; then
+    installed="$(awk '{print $1}' "$checksum_installed")"
+    case "$installed" in
+      *[!0-9a-fA-F]*|'') ;;
+      *)
+        if [ "${#installed}" -eq 64 ]; then
+          rm -f "$checksum_tmp"
+          echo "Warning: unable to check for monk-agent updates; using the previously checksummed installation at $target." >&2
+          printf '%s\n' "$target"
+          exit 0
+        fi
+        ;;
+    esac
+  fi
+  echo "Unable to check for monk-agent updates and no verified local installation is available." >&2
+  exit 1
 fi
 
 expected="$(awk '{print $1}' "$checksum_tmp")"
