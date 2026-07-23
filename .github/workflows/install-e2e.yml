@@ -27,6 +27,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Test launcher fallbacks
+        shell: bash
+        run: ./tests/start-monk-agent-antigravity-python-path.sh
+
       - name: Install monk-agent
         shell: bash
         env:
