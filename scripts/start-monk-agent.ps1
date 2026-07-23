@@ -91,7 +91,7 @@ function Register-AntigravityMcp {
   }
   $TempPath = "$ConfigPath.tmp-$PID"
   try {
-    $Config | ConvertTo-Json -Depth 20 | Set-Content -Encoding UTF8 $TempPath
+    $Config | ConvertTo-Json -Depth 100 | Set-Content -Encoding UTF8 $TempPath
     Move-Item -Force $TempPath $ConfigPath
   } finally {
     Remove-Item -Force $TempPath -ErrorAction SilentlyContinue

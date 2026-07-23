@@ -9,6 +9,10 @@ $Launchers = @(
   (Join-Path $RepoRoot ".antigravity-plugin\scripts\start-monk-agent.ps1")
 )
 $OriginalHome = $HOME
+$LauncherHashes = @($Launchers | ForEach-Object { (Get-FileHash -Algorithm SHA256 $_).Hash })
+if (@($LauncherHashes | Select-Object -Unique).Count -ne 1) {
+  throw "Rendered PowerShell launchers are not byte-identical"
+}
 
 try {
   foreach ($Launcher in $Launchers) {
@@ -79,15 +83,34 @@ try {
       $OldWarningPreference = $WarningPreference
       try {
         $WarningPreference = "SilentlyContinue"
-        foreach ($Seed in @('{invalid', '[]')) {
+        foreach ($Seed in @('{invalid', '[]', '[{"x":1}]', '1', 'true', '"text"')) {
           $Seed | Set-Content -NoNewline -Encoding UTF8 $ConfigPath
+          $BeforeHash = (Get-FileHash -Algorithm SHA256 $ConfigPath).Hash
           Register-AntigravityMcp
-          if ((Get-Content -Raw $ConfigPath) -ne $Seed) {
-            throw "Invalid or non-object config was overwritten: $Launcher"
+          $AfterHash = (Get-FileHash -Algorithm SHA256 $ConfigPath).Hash
+          if ($AfterHash -ne $BeforeHash) {
+            throw "Invalid or non-object config bytes were overwritten: $Launcher"
           }
         }
       } finally {
         $WarningPreference = $OldWarningPreference
+      }
+
+      $Nested = [pscustomobject]@{ leaf = "preserve-me" }
+      for ($Depth = 0; $Depth -lt 22; $Depth++) {
+        $Nested = [pscustomobject]@{ next = $Nested }
+      }
+      [pscustomobject]@{ unrelated = $Nested } |
+        ConvertTo-Json -Depth 100 |
+        Set-Content -Encoding UTF8 $ConfigPath
+      Register-AntigravityMcp
+      $Config = Get-Content -Raw $ConfigPath | ConvertFrom-Json
+      $Cursor = $Config.unrelated
+      for ($Depth = 0; $Depth -lt 22; $Depth++) {
+        $Cursor = $Cursor.next
+      }
+      if ($Cursor.leaf -ne "preserve-me") {
+        throw "Nested unrelated config was not preserved: $Launcher"
       }
     } finally {
       Set-Variable -Name HOME -Value $OriginalHome -Force

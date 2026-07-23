@@ -67,7 +67,7 @@ jobs:
         run: .\tests\block-monk-windows.ps1
 
       - name: Test Windows Antigravity MCP registration
-        shell: pwsh
+        shell: powershell
         run: .\tests\register-antigravity-mcp-windows.ps1
 
       - name: Install monk-agent
