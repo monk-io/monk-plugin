@@ -83,14 +83,14 @@ function Stop-ManagedAgent {
 }
 
 if ($AutoUpdate -eq "0" -or $AutoUpdate -eq "false") {
-  $Existing = Get-Command monk-agent.exe -ErrorAction SilentlyContinue
-  if ($Existing) {
-    Write-Output $Existing.Source
+  if (Test-Path $Target) {
+    Write-Output $Target
     exit 0
   }
 
-  if (Test-Path $Target) {
-    Write-Output $Target
+  $Existing = Get-Command monk-agent.exe -ErrorAction SilentlyContinue
+  if ($Existing) {
+    Write-Output $Existing.Source
     exit 0
   }
 }
@@ -111,36 +111,54 @@ $ChecksumTmp = Join-Path $InstallDir ".monk-agent.tmp.sha256"
 $ExtractDir = Join-Path $InstallDir ".monk-agent.extract"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
-Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumTmp
-
-$Expected = ((Get-Content -Raw $ChecksumTmp).Trim() -split "\s+")[0].ToLowerInvariant()
-
-if ((Test-Path $Target) -and (Test-Path $ChecksumInstalled)) {
-  $Installed = ((Get-Content -Raw $ChecksumInstalled).Trim() -split "\s+")[0].ToLowerInvariant()
-  if ($Installed -eq $Expected) {
-    Remove-Item -Force $ChecksumTmp
-    Write-Output $Target
-    exit 0
+# Launchers on different ports hold different launcher mutexes but still share
+# these installer paths, so serialize the complete update transaction here.
+$InstallerMutex = New-Object System.Threading.Mutex($false, "Local\monk-agent-installer")
+$InstallerMutexOwned = $false
+try {
+  try {
+    $InstallerMutexOwned = $InstallerMutex.WaitOne()
+  } catch [System.Threading.AbandonedMutexException] {
+    # A previous installer died while holding the mutex; ownership transfers to us.
+    $InstallerMutexOwned = $true
   }
-}
 
-Write-Host "Installing monk-agent from $Url"
-Invoke-WebRequest -Uri $Url -OutFile $ArchiveTmp
+  Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumTmp
 
-$Actual = Get-FileSha256 $ArchiveTmp
-if ($Actual -ne $Expected) {
-  Write-Error "Checksum verification failed for monk-agent."
-  exit 1
-}
+  $Expected = ((Get-Content -Raw $ChecksumTmp).Trim() -split "\s+")[0].ToLowerInvariant()
 
-if (Test-Path $ExtractDir) {
+  if ((Test-Path $Target) -and (Test-Path $ChecksumInstalled)) {
+    $Installed = ((Get-Content -Raw $ChecksumInstalled).Trim() -split "\s+")[0].ToLowerInvariant()
+    if ($Installed -eq $Expected) {
+      Remove-Item -Force $ChecksumTmp
+      Write-Output $Target
+      exit 0
+    }
+  }
+
+  Write-Host "Installing monk-agent from $Url"
+  Invoke-WebRequest -Uri $Url -OutFile $ArchiveTmp
+
+  $Actual = Get-FileSha256 $ArchiveTmp
+  if ($Actual -ne $Expected) {
+    Write-Error "Checksum verification failed for monk-agent."
+    exit 1
+  }
+
+  if (Test-Path $ExtractDir) {
+    Remove-Item -Recurse -Force $ExtractDir
+  }
+  New-Item -ItemType Directory -Force -Path $ExtractDir | Out-Null
+  Expand-Archive -Force -Path $ArchiveTmp -DestinationPath $ExtractDir
+  Stop-ManagedAgent
+  Move-Item -Force (Join-Path $ExtractDir "monk-agent.exe") $Target
+  "$Expected  $Artifact" | Set-Content -NoNewline $ChecksumInstalled
   Remove-Item -Recurse -Force $ExtractDir
+  Remove-Item -Force $ArchiveTmp, $ChecksumTmp
+  Write-Output $Target
+} finally {
+  if ($InstallerMutexOwned) {
+    $InstallerMutex.ReleaseMutex()
+  }
+  $InstallerMutex.Dispose()
 }
-New-Item -ItemType Directory -Force -Path $ExtractDir | Out-Null
-Expand-Archive -Force -Path $ArchiveTmp -DestinationPath $ExtractDir
-Stop-ManagedAgent
-Move-Item -Force (Join-Path $ExtractDir "monk-agent.exe") $Target
-"$Expected  $Artifact" | Set-Content -NoNewline $ChecksumInstalled
-Remove-Item -Recurse -Force $ExtractDir
-Remove-Item -Force $ArchiveTmp, $ChecksumTmp
-Write-Output $Target
