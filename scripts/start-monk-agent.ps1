@@ -28,6 +28,7 @@ $LogOut = Join-Path $LogDir "monk-agent.out.log"
 $LogErr = Join-Path $LogDir "monk-agent.err.log"
 $PidFile = Join-Path $RunDir "monk-agent.pid"
 $HealthUrl = "http://${AgentHost}:$Port/.well-known/oauth-protected-resource"
+$HealthResource = "http://${AgentHost}:$Port/mcp"
 
 New-Item -ItemType Directory -Force -Path $LogDir, $RunDir | Out-Null
 
@@ -50,7 +51,8 @@ $IdeVersion = if ($env:CURSOR_VERSION) { $env:CURSOR_VERSION } else { "" }
 function Test-AgentRunning {
   try {
     $Response = Invoke-WebRequest -Uri $HealthUrl -UseBasicParsing -TimeoutSec 2
-    return $Response.Content -match '"resource"'
+    $Document = $Response.Content | ConvertFrom-Json -ErrorAction Stop
+    return [string]$Document.resource -ceq $HealthResource
   } catch {
     return $false
   }
