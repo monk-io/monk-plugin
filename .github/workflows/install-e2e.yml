@@ -54,6 +54,10 @@ jobs:
           grep '"version"' "$RUNNER_TEMP/status.json"
           grep '"signedIn": true' "$RUNNER_TEMP/status.json"
 
+      - name: Check launcher readiness deadline
+        shell: bash
+        run: ./tests/start-monk-agent-readiness-timeout.sh
+
   windows:
     name: windows-latest
     runs-on: windows-latest
@@ -105,6 +109,10 @@ jobs:
           if (-not $status.auth.signedIn) {
             throw "expected simulated auth to be signed in"
           }
+
+      - name: Check launcher readiness deadline
+        shell: pwsh
+        run: .\tests\start-monk-agent-readiness-timeout.ps1
 
       - name: Start monk-agent
         shell: pwsh
