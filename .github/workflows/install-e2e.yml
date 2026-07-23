@@ -27,6 +27,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Test POSIX restart handoff
+        run: ./tests/start-monk-agent-restart-handoff.sh
+
       - name: Install monk-agent
         shell: bash
         env:

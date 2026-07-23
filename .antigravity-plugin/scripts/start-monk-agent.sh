@@ -341,7 +341,17 @@ start_with_background_process() {
   if [ -f "$pid_file" ]; then
     old_pid="$(cat "$pid_file" 2>/dev/null || true)"
     if [ -n "$old_pid" ]; then
-      kill "$old_pid" >/dev/null 2>&1 || true
+      if kill "$old_pid" >/dev/null 2>&1; then
+        stop_tries=0
+        while kill -0 "$old_pid" >/dev/null 2>&1 && [ "$stop_tries" -lt 10 ]; do
+          sleep 1
+          stop_tries=$((stop_tries + 1))
+        done
+        if kill -0 "$old_pid" >/dev/null 2>&1; then
+          echo "monk-agent did not stop within 10 seconds; refusing to start a competing replacement." >&2
+          return 1
+        fi
+      fi
     fi
   fi
   export MONK_AUTH_URL="$auth_url"
