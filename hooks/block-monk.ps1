@@ -11,8 +11,25 @@ $agentDir = if ($env:MONK_AGENT_INSTALL_DIR) { $env:MONK_AGENT_INSTALL_DIR } els
 $agent = if ($env:MONK_AGENT_PATH) { $env:MONK_AGENT_PATH } else { Join-Path $agentDir "monk-agent.exe" }
 
 if (Test-Path $agent) {
-  $hookInput | & $agent hook block-monk --format claude
-  exit $LASTEXITCODE
+  # Treat the helper as authoritative only when it succeeds and emits a
+  # decision. An interrupted update, incompatible binary, or startup failure
+  # must not turn the guard off: discard the helper error and use the native
+  # parser below. A successful empty response also falls through safely; the
+  # fallback permits ordinary commands and still blocks direct `monk` calls.
+  $agentOutput = @($hookInput | & $agent hook block-monk --format claude 2>$null)
+  if ($LASTEXITCODE -eq 0 -and $agentOutput.Count -gt 0) {
+    $agentText = $agentOutput -join [Environment]::NewLine
+    try {
+      $agentDecision = $agentText | ConvertFrom-Json
+    } catch {
+      $agentDecision = $null
+    }
+    if ($agentDecision.hookSpecificOutput.hookEventName -eq "PreToolUse" -and
+        $agentDecision.hookSpecificOutput.permissionDecision -in @("allow", "ask", "deny")) {
+      Write-Output $agentText
+      exit 0
+    }
+  }
 }
 
 # Fallback: binary unavailable. Match `monk` only in command position.
