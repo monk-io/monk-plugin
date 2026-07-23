@@ -340,8 +340,22 @@ EOF
 start_with_background_process() {
   if [ -f "$pid_file" ]; then
     old_pid="$(cat "$pid_file" 2>/dev/null || true)"
+    case "$old_pid" in
+      ''|0|*[!0-9]*) old_pid="" ;;
+    esac
     if [ -n "$old_pid" ]; then
-      kill "$old_pid" >/dev/null 2>&1 || true
+      if kill -0 "$old_pid" >/dev/null 2>&1; then
+        kill -TERM "$old_pid" >/dev/null 2>&1 || true
+        wait_tries=0
+        while kill -0 "$old_pid" >/dev/null 2>&1; do
+          if [ "$wait_tries" -ge 30 ]; then
+            echo "monk-agent pid $old_pid did not exit within 30s after SIGTERM." >&2
+            return 1
+          fi
+          wait_tries=$((wait_tries + 1))
+          sleep 1
+        done
+      fi
     fi
   fi
   export MONK_AUTH_URL="$auth_url"
