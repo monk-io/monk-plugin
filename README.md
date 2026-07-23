@@ -10,15 +10,28 @@
 > Security and data-loss findings: report privately to security@monk.io, _not
 > in public issues._
 
-Deploy and operate full applications with [Monk](https://monk.io) — cloud
-infrastructure, SaaS integrations, and containerized workloads — directly from
-Claude Code, Cursor, OpenAI Codex, and Google Antigravity.
+## What is Monk?
 
-Your agent writes the code. Monk deploys it and keeps it running on your own
-cloud: infrastructure, databases, networking, TLS, CI/CD, monitoring. The
-agent talks to a deterministic orchestrator instead of a shell — it never
-sees your credentials, and destructive actions require your approval in
-Monk's UI, below the agent.
+[Monk](https://monk.io) is a DevOps agent that works alongside your coding
+agent. Your agent writes the code; Monk takes it to production and keeps it
+running — on your own cloud accounts (AWS, GCP, Azure, DigitalOcean,
+Hetzner), with infrastructure, databases, networking, TLS, CI/CD, and
+monitoring handled for you.
+
+This plugin connects Claude Code, Cursor, OpenAI Codex, or Google Antigravity
+to Monk. Once installed, you deploy and operate in plain language:
+"deploy this app", "show me the logs", "set up CI/CD", "what is this costing
+me?" — no Dockerfiles, no Terraform, no cloud consoles.
+
+**Watch it work** (2 minutes):
+[Give Your Coding Agent a DevOps Engineer](https://www.youtube.com/watch?v=8-oLii4qrWg) ·
+[One Prompt to Production](https://www.youtube.com/watch?v=O4qZoTZVyhg) ·
+[Your App Runs Itself](https://www.youtube.com/watch?v=jzIex2_J6bM)
+
+Monk is built for safety around AI agents: your coding agent talks to a
+deterministic orchestrator instead of a shell. It never sees your cloud
+credentials, and destructive actions (deploys, deletions, cluster changes)
+require your explicit approval in Monk's UI — not the agent's chat.
 
 A Monk account is required: [create one at monk.io](https://monk.io). The
 plugin opens a browser sign-in on first use.
@@ -92,11 +105,12 @@ complete the browser sign-in flow: `/mcp` in Claude Code,
 
 ## Basic usage
 
-Ask your coding agent to deploy and operate with Monk, for example:
+Prompts start with `/monk` followed by what you want, for example:
 
-- "Deploy this project with Monk."
-- "Show my Monk workload status."
-- "Diagnose my Monk deployment."
+- `/monk describe this project`
+- `/monk deploy this project`
+- `/monk show workload status`
+- `/monk diagnose my deployment`
 
 The plugin gives the agent Monk tools through a local MCP server. Privileged
 operations such as deploys, cluster changes, and deletions ask for your
@@ -105,27 +119,13 @@ Monk web UI — never pasted into agent chat.
 
 ## Reporting bugs
 
-Found something broken, slow, or confusing? File an issue on this repo using
-the [bug bounty report template](https://github.com/monk-io/monk-plugin/issues/new?template=bug_bounty_report.yml) —
-during the bounty every valid report earns points toward the
-[prizes](https://monk.io/bug-bounty). It asks for:
+Found something broken, slow, or confusing?
 
-- **Stage**: install, connect, build, deploy, or operate
-- **Coding agent**: Claude Code, Cursor, Codex, Antigravity + version
-- **Repro steps**, expected vs. actual
-- **Severity** (your guess): crash, blocker, major, minor
-- **Setup**: OS, monkd version, target cloud, integration
+Three ways to report it:
 
-One bug per issue. Duplicates are merged into the first report. Feature
-requests and content about your run (blog, stream, tweet) earn points too —
-open a regular issue with the details or the link.
-
-To be scored you need a Monk account — sign in at [monk.io](https://monk.io)
-with the same GitHub account you file from — and findings should come from
-actually using the product. Reports without a linked account, and findings
-from pure code analysis, are welcome but won't earn points.
-**Security and data-loss findings go to security@monk.io** — please don't
-post exploitable details publicly.
+- [Open an issue on this repo](https://github.com/monk-io/monk-plugin/issues/new)
+- Prompt `/monk report bug: ...` in your agent, and describe what went wrong.
+- Use the bug icon in the top-right corner of the [Monk Dashboard](https://monk.io/dashboard) to report a bug or request a feature.
 
 ## What gets installed
 

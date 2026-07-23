@@ -96,6 +96,7 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.cluster.peer.tag`
 - `monk.cluster.peer.set_certificate`
 - `monk.cluster.peer.reset_certificate`
+- `monk.cluster.upgrade`
 - `monk.cluster.delete`
 - `monk.cluster.exit`
 - `monk.cluster.provider.ensure`

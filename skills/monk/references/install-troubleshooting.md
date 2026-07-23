@@ -63,10 +63,10 @@ monk.install.status
 monk.install.run
 ```
 
-The Linux install action should follow the same package-manager path as the VS
-Code extension: add Monk's signed apt or dnf repository, install the `monk`
-package, write the `monkd` systemd override, reload systemd, and restart
-`monkd`. Do not suggest a one-shot curl-pipe installer URL.
+The Linux install action follows the standard package-manager path: add Monk's
+signed apt or dnf repository, install the `monk` package, write the `monkd`
+systemd override, reload systemd, and restart `monkd`. Do not suggest a
+one-shot curl-pipe installer URL.
 
 Explain the graph clearly: `monk-agent` runs MCP/dashboard; apt/dnf installs
 Monk; systemd starts and supervises `monkd`.
