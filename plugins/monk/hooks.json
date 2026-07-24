@@ -1,0 +1,42 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -c \"$PLUGIN_ROOT/scripts/start-monk-agent.sh\"",
+            "commandWindows": "C:\\Windows\\System32\\cmd.exe /c \"\"%PLUGIN_ROOT%\\scripts\\run-powershell.cmd\" \"%PLUGIN_ROOT%\\scripts\\start-monk-agent.ps1\"\"",
+            "timeout": 180
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -c \"$PLUGIN_ROOT/hooks/block-monk.sh\"",
+            "commandWindows": "C:\\Windows\\System32\\cmd.exe /c \"\"%PLUGIN_ROOT%\\scripts\\run-powershell.cmd\" \"%PLUGIN_ROOT%\\hooks\\block-monk.ps1\"\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -c \"$PLUGIN_ROOT/hooks/monk-diagnostics-codex.sh\"",
+            "commandWindows": "C:\\Windows\\System32\\cmd.exe /c \"\"%PLUGIN_ROOT%\\scripts\\run-powershell.cmd\" \"%PLUGIN_ROOT%\\hooks\\monk-diagnostics.ps1\" -Format codex\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

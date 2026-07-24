@@ -4,7 +4,11 @@ set -eu
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 case "$(uname -s 2>/dev/null || printf unknown)" in
   MINGW*|MSYS*|CYGWIN*)
-    exec powershell.exe -NoProfile -ExecutionPolicy Bypass \
+    # Pin to the absolute Windows PowerShell path. A bare `powershell.exe` is
+    # resolved with the current directory searched before PATH, so a workspace
+    # could plant its own; SYSTEMROOT is OS-controlled and non-writable (ENG-441).
+    ps_exe="$(printf '%s' "${SYSTEMROOT:-${WINDIR:-C:/Windows}}" | tr '\\' '/')/System32/WindowsPowerShell/v1.0/powershell.exe"
+    exec "$ps_exe" -NoProfile -ExecutionPolicy Bypass \
       -File "$script_dir/ensure-monk-agent.ps1" "$@"
     ;;
 esac

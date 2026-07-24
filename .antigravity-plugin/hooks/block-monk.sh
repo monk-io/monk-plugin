@@ -14,6 +14,13 @@
 
 set -eu
 
+# On Windows the .ps1 sibling owns this hook. A host may spawn .sh hooks in an
+# interactive git-bash window (e.g. Cursor on Windows) whose stdin is a TTY,
+# where `cat` would block forever. Bow out on Windows-flavored bash, or whenever
+# stdin is not a pipe, so we never hang and never double up with the .ps1.
+case "$(uname -s 2>/dev/null)" in MINGW* | MSYS* | CYGWIN*) exit 0 ;; esac
+if [ -t 0 ]; then exit 0; fi
+
 input="$(cat)"
 
 agent="${MONK_AGENT_PATH:-${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent}"

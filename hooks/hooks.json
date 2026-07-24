@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/uninstall-monk-agent.ps1\" -FromHook -Yes",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/run-powershell.cmd\" \"${CLAUDE_PLUGIN_ROOT}/scripts/uninstall-monk-agent.ps1\" -FromHook -Yes",
             "timeout": 300
           },
           {
@@ -22,7 +22,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/start-monk-agent.ps1\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/run-powershell.cmd\" \"${CLAUDE_PLUGIN_ROOT}/scripts/start-monk-agent.ps1\"",
             "timeout": 180
           },
           {
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/hooks/block-monk.ps1\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/run-powershell.cmd\" \"${CLAUDE_PLUGIN_ROOT}/hooks/block-monk.ps1\"",
             "timeout": 5
           },
           {
@@ -56,7 +56,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/hooks/monk-diagnostics.ps1\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/run-powershell.cmd\" \"${CLAUDE_PLUGIN_ROOT}/hooks/monk-diagnostics.ps1\"",
             "timeout": 30
           },
           {

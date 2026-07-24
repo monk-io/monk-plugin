@@ -9,16 +9,18 @@
 
 $ErrorActionPreference = "SilentlyContinue"
 
-$hookInput = [Console]::In.ReadToEnd()
-
-# If bash is available the .sh sibling hook handles this; bow out to avoid
-# emitting the same diagnostics twice (Antigravity runs every hook in the list).
-if (Get-Command bash -ErrorAction SilentlyContinue) { exit 0 }
+# On non-Windows the .sh sibling handles this; bow out to avoid emitting the same
+# diagnostics twice. On Windows the .ps1 owns it: a host may spawn the .sh in an
+# interactive git-bash window whose stdin is a TTY, where the .sh can't read the
+# payload - so the .sh bows out on Windows and the .ps1 does the work here.
+if ($env:OS -ne 'Windows_NT' -and (Get-Command bash -ErrorAction SilentlyContinue)) { exit 0 }
 
 $InstallDir = if ($env:MONK_AGENT_INSTALL_DIR) { $env:MONK_AGENT_INSTALL_DIR } else { Join-Path $HOME ".monk\bin" }
 $agent = if ($env:MONK_AGENT_PATH) { $env:MONK_AGENT_PATH } else { Join-Path $InstallDir "monk-agent.exe" }
 
 if (-not (Test-Path $agent)) { exit 0 }
 
-try { $hookInput | & $agent hook diagnostics --format antigravity } catch { }
+# The binary reads the payload straight from stdin (see block-monk.ps1 for why we
+# do not read it into a PowerShell string and re-pipe it).
+try { & $agent hook diagnostics --format antigravity } catch { }
 exit 0
