@@ -156,10 +156,78 @@ remove_runtime() {
   esac
 }
 
+remove_antigravity_mcp_registration() {
+  mcp_cfg="${MONK_ANTIGRAVITY_CONFIG:-"$home_dir/.gemini/config/mcp_config.json"}"
+  [ -f "$mcp_cfg" ] || return 0
+
+  tmp="$(mktemp "${TMPDIR:-/tmp}/monk-mcp-config.XXXXXX")"
+  if command -v jq >/dev/null 2>&1; then
+    if ! jq empty "$mcp_cfg" >/dev/null 2>&1; then
+      rm -f "$tmp"
+      echo "Warning: leaving malformed Antigravity MCP config unchanged: $mcp_cfg" >&2
+      return 0
+    fi
+    if ! jq -e '.mcpServers | type == "object" and has("monk")' "$mcp_cfg" >/dev/null 2>&1; then
+      rm -f "$tmp"
+      return 0
+    fi
+    if ! jq 'del(.mcpServers.monk) | if .mcpServers == {} then del(.mcpServers) else . end' "$mcp_cfg" >"$tmp"; then
+      rm -f "$tmp"
+      echo "Warning: could not update Antigravity MCP config: $mcp_cfg" >&2
+      return 0
+    fi
+  elif command -v python3 >/dev/null 2>&1; then
+    status=0
+    python3 - "$mcp_cfg" >"$tmp" <<'PY' || status=$?
+import json
+import sys
+
+path = sys.argv[1]
+try:
+    with open(path, encoding="utf-8-sig") as source:
+        config = json.load(source)
+except (OSError, ValueError):
+    sys.exit(2)
+
+servers = config.get("mcpServers") if isinstance(config, dict) else None
+if not isinstance(servers, dict) or "monk" not in servers:
+    sys.exit(3)
+
+del servers["monk"]
+if not servers:
+    del config["mcpServers"]
+json.dump(config, sys.stdout, indent=2)
+sys.stdout.write("\n")
+PY
+    case "$status" in
+      0) ;;
+      3) rm -f "$tmp"; return 0 ;;
+      *)
+        rm -f "$tmp"
+        echo "Warning: leaving malformed Antigravity MCP config unchanged: $mcp_cfg" >&2
+        return 0
+        ;;
+    esac
+  else
+    rm -f "$tmp"
+    echo "Warning: could not inspect $mcp_cfg; remove mcpServers.monk manually (jq or python3 required)." >&2
+    return 0
+  fi
+
+  if mv "$tmp" "$mcp_cfg"; then
+    echo "Removed Monk MCP registration from $mcp_cfg" >&2
+  else
+    rm -f "$tmp"
+    echo "Warning: could not update Antigravity MCP config: $mcp_cfg" >&2
+  fi
+}
+
 stop_agent
 remove_agent_files
 if [ "$remove_runtime" = "1" ]; then
   remove_runtime
 fi
+
+remove_antigravity_mcp_registration
 
 echo "monk-agent uninstall complete."
