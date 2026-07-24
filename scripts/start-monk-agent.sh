@@ -141,9 +141,9 @@ emit_signin_nudge() {
   attempt=0
   while [ "$attempt" -lt 3 ]; do
     if command -v curl >/dev/null 2>&1; then
-      body="$(curl -fsS --max-time 5 "$status_url" 2>/dev/null || true)"
+      body="$(curl -fsS --noproxy '*' --max-time 5 "$status_url" 2>/dev/null || true)"
     elif command -v wget >/dev/null 2>&1; then
-      body="$(wget -q -T 5 -O - "$status_url" 2>/dev/null || true)"
+      body="$(env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY wget -q -T 5 -O - "$status_url" 2>/dev/null || true)"
     fi
     [ -n "$body" ] && break
     attempt=$((attempt + 1))
@@ -158,9 +158,9 @@ emit_signin_nudge() {
   # $client is resolved once at the top of the script (Cursor-aware ordering).
   nudge_url="http://$host:$port/plugin/nudge?type=signin&client=$client"
   if command -v curl >/dev/null 2>&1; then
-    curl -fsS --max-time 2 -X POST "$nudge_url" >/dev/null 2>&1 || true
+    curl -fsS --noproxy '*' --max-time 2 -X POST "$nudge_url" >/dev/null 2>&1 || true
   elif command -v wget >/dev/null 2>&1; then
-    wget -q -T 2 -O - --post-data="" "$nudge_url" >/dev/null 2>&1 || true
+    env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY wget -q -T 2 -O - --post-data="" "$nudge_url" >/dev/null 2>&1 || true
   fi
   msg="monk-agent is running but you are NOT signed in to Monk. The Monk MCP tools require sign-in. If the user asks to deploy, analyze, or operate anything with Monk, first tell them to run /mcp and authenticate the monk MCP server (this signs them in to Monk). Do NOT describe this as a connection or restart problem, and do NOT deploy via Docker or another platform to work around it."
   if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && command -v jq >/dev/null 2>&1; then
@@ -173,11 +173,11 @@ emit_signin_nudge() {
 
 is_running() {
   if command -v curl >/dev/null 2>&1; then
-    curl -fsS --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
+    curl -fsS --noproxy '*' --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
     return $?
   fi
   if command -v wget >/dev/null 2>&1; then
-    wget -q -T 2 -O - "$health_url" 2>/dev/null | grep -q '"resource"'
+    env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY wget -q -T 2 -O - "$health_url" 2>/dev/null | grep -q '"resource"'
     return $?
   fi
   return 1
