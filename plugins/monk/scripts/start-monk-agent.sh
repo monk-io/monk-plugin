@@ -59,7 +59,13 @@ elif [ -n "${PLUGIN_ROOT:-}" ]; then
 fi
 ide_version="${CURSOR_VERSION:-}"
 
-health_url="http://$host:$port/.well-known/oauth-protected-resource"
+url_host="$host"
+case "$url_host" in
+  \[*\]) ;;
+  *:*) url_host="[$url_host]" ;;
+esac
+base_url="http://$url_host:$port"
+health_url="$base_url/.well-known/oauth-protected-resource"
 
 # Register monk in Antigravity's global MCP config if ~/.gemini/config/ exists.
 # Idempotent — skips if already registered. Uses jq when available; prints
@@ -68,7 +74,7 @@ register_antigravity_mcp() {
   gemini_cfg="$HOME/.gemini/config"
   [ -d "$gemini_cfg" ] || return 0
   mcp_cfg="$gemini_cfg/mcp_config.json"
-  server_url="http://$host:$port/mcp"
+  server_url="$base_url/mcp"
   if [ -f "$mcp_cfg" ] && grep -q '"monk"' "$mcp_cfg" 2>/dev/null; then
     return 0
   fi
@@ -123,7 +129,7 @@ emit_signin_nudge() {
   # /status.json, which runs ~10 synchronous install probes (~2s/call and
   # serializes under concurrent dashboard/MCP load) — that latency pushed this
   # check past the curl timeout and made the nudge racy.
-  status_url="http://$host:$port/auth.json"
+  status_url="$base_url/auth.json"
   body=""
   # A just-(re)started agent can still report a transient MISS on the first probe
   # (connection refused during the restart window, or a 500 from a cold macOS
@@ -152,7 +158,7 @@ emit_signin_nudge() {
   # suppress the nudge. Only an affirmative signedIn:false reaches the nudge below.
   [ -n "$body" ] || return 0
   # $client is resolved once at the top of the script (Cursor-aware ordering).
-  nudge_url="http://$host:$port/plugin/nudge?type=signin&client=$client"
+  nudge_url="$base_url/plugin/nudge?type=signin&client=$client"
   if command -v curl >/dev/null 2>&1; then
     curl -fsS --max-time 2 -X POST "$nudge_url" >/dev/null 2>&1 || true
   elif command -v wget >/dev/null 2>&1; then

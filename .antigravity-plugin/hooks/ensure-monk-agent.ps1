@@ -18,7 +18,12 @@ if (Get-Command bash -ErrorAction SilentlyContinue) { exit 0 }
 
 $Port = if ($env:MONK_AGENT_PORT) { $env:MONK_AGENT_PORT } else { "7419" }
 $AgentHost = if ($env:MONK_AGENT_HOST) { $env:MONK_AGENT_HOST } else { "127.0.0.1" }
-$HealthUrl = "http://${AgentHost}:$Port/.well-known/oauth-protected-resource"
+$UrlHost = if ($AgentHost.Contains(":") -and -not ($AgentHost.StartsWith("[") -and $AgentHost.EndsWith("]"))) {
+  "[$AgentHost]"
+} else {
+  $AgentHost
+}
+$HealthUrl = "http://${UrlHost}:$Port/.well-known/oauth-protected-resource"
 
 function Write-Json {
   param([object]$Object)

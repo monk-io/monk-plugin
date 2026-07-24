@@ -11,7 +11,12 @@ set -eu
 
 port="${MONK_AGENT_PORT:-7419}"
 host="${MONK_AGENT_HOST:-127.0.0.1}"
-health_url="http://$host:$port/.well-known/oauth-protected-resource"
+url_host="$host"
+case "$url_host" in
+  \[*\]) ;;
+  *:*) url_host="[$url_host]" ;;
+esac
+health_url="http://$url_host:$port/.well-known/oauth-protected-resource"
 
 is_running() {
   if command -v curl >/dev/null 2>&1; then

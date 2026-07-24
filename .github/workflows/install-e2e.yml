@@ -54,6 +54,10 @@ jobs:
           grep '"version"' "$RUNNER_TEMP/status.json"
           grep '"signedIn": true' "$RUNNER_TEMP/status.json"
 
+      - name: Verify IPv6 companion URLs
+        shell: bash
+        run: ./tests/start-monk-agent-ipv6.sh
+
   windows:
     name: windows-latest
     runs-on: windows-latest
