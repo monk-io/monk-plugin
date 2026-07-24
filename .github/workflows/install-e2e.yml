@@ -66,6 +66,10 @@ jobs:
         shell: pwsh
         run: .\tests\block-monk-windows.ps1
 
+      - name: Test POSIX shell line endings
+        shell: pwsh
+        run: .\tests\posix-line-endings-windows.ps1
+
       - name: Install monk-agent
         shell: pwsh
         env:
