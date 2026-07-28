@@ -12,12 +12,24 @@ $PreviousPath = $env:Path
 
 $Cases = @(
   @{ Name = "direct"; Command = "monk deploy"; Denied = $true },
+  @{ Name = "direct-daemon"; Command = "monkd version"; Denied = $true },
   @{ Name = "newline"; Command = "echo ok`nmonk deploy"; Denied = $true },
   @{ Name = "crlf"; Command = "echo ok`r`nmonk deploy"; Denied = $true },
   @{ Name = "brace"; Command = "{ monk deploy; }"; Denied = $true },
   @{ Name = "newline-sudo"; Command = "echo ok`nsudo monk deploy"; Denied = $true },
+  @{ Name = "separator-daemon"; Command = "echo ok; monkd"; Denied = $true },
+  @{ Name = "command-wrapper"; Command = "command monk deploy"; Denied = $true },
+  @{ Name = "env-wrapper"; Command = "env monk deploy"; Denied = $true },
+  @{ Name = "nested-bash"; Command = 'bash -lc "monk deploy"'; Denied = $true },
+  @{ Name = "which-substitution"; Command = '$(which monk) deploy'; Denied = $true },
+  @{ Name = "absolute-posix"; Command = "/usr/local/bin/monk deploy"; Denied = $true },
+  @{ Name = "absolute-home-daemon"; Command = "~/.monk/bin/monkd"; Denied = $true },
+  @{ Name = "absolute-windows"; Command = "C:\Users\PC\.monk\bin\monk.exe deploy"; Denied = $true },
+  @{ Name = "powershell-inline"; Command = "powershell.exe -Command monk deploy"; Denied = $true },
   @{ Name = "similar-command"; Command = "monkey deploy"; Denied = $false },
-  @{ Name = "argument"; Command = "grep monk README.md"; Denied = $false }
+  @{ Name = "argument"; Command = "grep monk README.md"; Denied = $false },
+  @{ Name = "echo-data"; Command = "echo monk"; Denied = $false },
+  @{ Name = "nested-data"; Command = 'bash -lc "grep monk README.md"'; Denied = $false }
 )
 
 function Assert-HookCases {
