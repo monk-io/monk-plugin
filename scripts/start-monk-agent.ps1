@@ -277,7 +277,10 @@ if (Test-Path $TelemetryHelper) {
 # `exit` points need no explicit unlock.
 $LauncherMutex = New-Object System.Threading.Mutex($false, "Local\monk-agent-launcher-$Port")
 try {
-  [void]$LauncherMutex.WaitOne([TimeSpan]::FromSeconds(190))
+  $gotLock = $LauncherMutex.WaitOne([TimeSpan]::FromSeconds(190))
+  if (-not $gotLock) {
+    Write-Error "monk-agent: timed out waiting for launcher mutex on port $Port"; exit 1
+  }
 } catch [System.Threading.AbandonedMutexException] {
   # A previous holder died mid-start; we now own the mutex and continue.
 }
