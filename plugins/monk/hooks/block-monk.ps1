@@ -26,7 +26,7 @@ $hookInput = $reader.ReadToEnd()
 try { $command = ($hookInput | ConvertFrom-Json).tool_input.command } catch { exit 0 }
 if (-not $command) { exit 0 }
 
-if ($command -match '(^|[\r\n;&|`({])\s*(sudo\s+)?monk(\s|$)') {
+if ($command -match '(^|[\r\n;&|`({])\s*(sudo\s+)?(monk|monkd)(\s|$)') {
   @{
     hookSpecificOutput = @{
       hookEventName            = "PreToolUse"

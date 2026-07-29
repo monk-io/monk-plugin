@@ -31,7 +31,7 @@ fi
 # Matches `monk` only in command position (start, or after a shell separator),
 # optional `sudo`, followed by whitespace/quote/end — so `monkey` is not matched.
 # False positives only ever BLOCK, never allow, which is the safe direction.
-if printf '%s' "$input" | grep -Eq '(^|["[:space:];&|`(])(sudo[[:space:]]+)?monk([[:space:]"]|$)'; then
+if printf '%s' "$input" | grep -Eq '(^|["[:space:];&|`(])(sudo[[:space:]]+)?(monk|monkd)([[:space:]"]|$)'; then
   cat <<'JSON'
 {
   "hookSpecificOutput": {

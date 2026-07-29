@@ -20,15 +20,16 @@ if (Test-Path $agent) {
 }
 
 # Fallback: binary unavailable. Read stdin as UTF-8 (BOM stripped) so the payload
-# survives a non-UTF-8 console code page, then match `monk` in command position.
+# survives a non-UTF-8 console code page, then match `monk` **or** `monkd` in command position.
 $reader = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), [System.Text.Encoding]::UTF8)
 $hookInput = $reader.ReadToEnd()
 try { $command = ($hookInput | ConvertFrom-Json).tool_input.command } catch { exit 0 }
 if (-not $command) { exit 0 }
 
-if ($command -match '(^|[\r\n;&|`({])\s*(sudo\s+)?monk(\s|$)') {
+if ($command -match '(^|[
+\n;&|`({])\s*(sudo\s+)?(monk|monkd)(\s|$)') {
   @{
-    hookSpecificOutput = @{
+
       hookEventName            = "PreToolUse"
       permissionDecision       = "deny"
       permissionDecisionReason = "Blocked: do not shell out to the ``monk`` CLI - it desyncs the cluster state Monk manages. Use the monk-agent MCP tools instead."
