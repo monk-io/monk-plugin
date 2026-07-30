@@ -30,6 +30,7 @@ $MonkHome = if ($env:MONK_AGENT_HOME) { $env:MONK_AGENT_HOME } else { Join-Path 
 # PowerShell counterpart of the plugin-version.sh source in start-monk-agent.sh.
 $PluginVersionScript = Join-Path $ScriptDir "plugin-version.ps1"
 if (Test-Path $PluginVersionScript) { . $PluginVersionScript }
+$PluginVersion = if ($env:MONK_PLUGIN_VERSION) { $env:MONK_PLUGIN_VERSION } else { "" }
 
 $DataDir = Join-Path $MonkHome "agent\launcher"
 $LogDir = Join-Path $DataDir "logs"
@@ -340,7 +341,8 @@ function Test-BackgroundStateConfigured {
     "auth_url=$AuthUrl",
     "auth_client_id=$AuthClientId",
     "auth_audience=$AuthAudience",
-    "autospin_url=$AutospinUrl"
+    "autospin_url=$AutospinUrl",
+    "plugin_version=$PluginVersion"
   )
   $Lines = $State -split "`r?`n"
   foreach ($Line in $Expected) {
@@ -382,7 +384,8 @@ $Process.Id | Set-Content -NoNewline $PidFile
   "auth_url=$AuthUrl",
   "auth_client_id=$AuthClientId",
   "auth_audience=$AuthAudience",
-  "autospin_url=$AutospinUrl"
+  "autospin_url=$AutospinUrl",
+  "plugin_version=$PluginVersion"
 ) -join "`n" | Set-Content -NoNewline $StateFile
 
 $ReadyTimer = [System.Diagnostics.Stopwatch]::StartNew()
