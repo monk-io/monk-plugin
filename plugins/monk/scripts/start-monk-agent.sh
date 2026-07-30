@@ -341,7 +341,9 @@ background_process_configured() {
     printf '%s\n' "$state" | grep -Fxq "auth_url=$auth_url" &&
     printf '%s\n' "$state" | grep -Fxq "auth_client_id=$auth_client_id" &&
     printf '%s\n' "$state" | grep -Fxq "auth_audience=$auth_audience" &&
-    printf '%s\n' "$state" | grep -Fxq "autospin_url=$autospin_url"
+    printf '%s\n' "$state" | grep -Fxq "autospin_url=$autospin_url" &&
+    printf '%s\n' "$state" | grep -Fxq "agent_local=${MONK_AGENT_LOCAL:-}" &&
+    printf '%s\n' "$state" | grep -Fxq "plugin_version=${MONK_PLUGIN_VERSION:-}"
 }
 
 if [ "${MONK_AGENT_SKIP_ENSURE:-0}" != "1" ]; then
@@ -460,6 +462,8 @@ start_with_background_process() {
     printf 'auth_client_id=%s\n' "$auth_client_id"
     printf 'auth_audience=%s\n' "$auth_audience"
     printf 'autospin_url=%s\n' "$autospin_url"
+    printf 'agent_local=%s\n' "${MONK_AGENT_LOCAL:-}"
+    printf 'plugin_version=%s\n' "${MONK_PLUGIN_VERSION:-}"
   } >"$state_file"
 }
 
