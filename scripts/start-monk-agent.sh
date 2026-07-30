@@ -1,491 +1,173 @@
-#!/usr/bin/env sh
-set -eu
+#!/bin/sh
+set -e
 
-port="${MONK_AGENT_PORT:-7419}"
-host="${MONK_AGENT_HOST:-127.0.0.1}"
-auth_url="${MONK_AUTH_URL:-https://auth.monk.io}"
-auth_client_id="${MONK_AGENT_AUTH_CLIENT_ID:-UW84YWcJME3buMSLfqLX8IbBsYdNWi47}"
-auth_audience="${MONK_AUTH_AUDIENCE:-oaknode.com}"
-autospin_url="${MONK_AUTOSPIN_URL:-wss://api.app.monk.io/autospin/}"
-agent_path_env="${PATH:-/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}"
-script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Host hooks terminate this launcher after 180 seconds. Keep readiness work
-# below that deadline so startup failures can print their own diagnostics
-# instead of being killed mid-wait (ENG-410).
-ready_timeout="${MONK_AGENT_READY_TIMEOUT:-150}"
-case "$ready_timeout" in
-  ''|*[!0-9]*) ready_timeout=150 ;;
-esac
-if [ "$ready_timeout" -lt 1 ]; then
-  ready_timeout=1
-elif [ "$ready_timeout" -gt 150 ]; then
-  ready_timeout=150
-fi
+AGENT_DIR="${AGENT_DIR:-$HOME/.monk}"
+AGENT_BIN="$AGENT_DIR/monk-agent"
+PID_FILE="$AGENT_DIR/monk-agent.pid"
+LOG_FILE="$AGENT_DIR/monk-agent.log"
+HEALTH_PORT="${MONK_AGENT_PORT:-28651}"
+MAX_WAIT="${MONK_START_TIMEOUT:-30}"
 
-# Rendered at plugin build time; carries MONK_PLUGIN_VERSION so the agent can
-# report the real plugin version in telemetry. Guarded: an older rendered
-# plugin without the file must still launch (the agent falls back to a labeled
-# agent-binary version).
-[ -f "$script_dir/plugin-version.sh" ] && . "$script_dir/plugin-version.sh"
-
-case "$(uname -s 2>/dev/null || printf unknown)" in
-  MINGW*|MSYS*|CYGWIN*)
-    # Pin to the absolute Windows PowerShell path. A bare `powershell.exe` is
-    # resolved with the current directory searched before PATH, so a workspace
-    # could plant its own; SYSTEMROOT is OS-controlled and non-writable (ENG-441).
-    ps_exe="$(printf '%s' "${SYSTEMROOT:-${WINDIR:-C:/Windows}}" | tr '\\' '/')/System32/WindowsPowerShell/v1.0/powershell.exe"
-    exec "$ps_exe" -NoProfile -ExecutionPolicy Bypass \
-      -File "$script_dir/start-monk-agent.ps1" "$@"
-    ;;
-esac
-
-plugin_root="${CLAUDE_PLUGIN_ROOT:-"$(dirname -- "$script_dir")"}"
-case ":$agent_path_env:" in
-  *:/opt/homebrew/bin:*) ;;
-  *) agent_path_env="/opt/homebrew/bin:$agent_path_env" ;;
-esac
-case ":$agent_path_env:" in
-  *:/usr/local/bin:*) ;;
-  *) agent_path_env="/usr/local/bin:$agent_path_env" ;;
-esac
-monk_home="${MONK_AGENT_HOME:-"$HOME/.monk"}"
-data_dir="$monk_home/agent/launcher"
-log_dir="$data_dir/logs"
-run_dir="$data_dir/run"
-log_file="$log_dir/monk-agent.log"
-pid_file="$run_dir/monk-agent.pid"
-state_file="$run_dir/monk-agent.state"
-launchd_label="io.monk.agent"
-launchd_plist="$HOME/Library/LaunchAgents/$launchd_label.plist"
-
-mkdir -p "$log_dir" "$run_dir"
-
-# Client whose hook fired this launcher. Order matters: Cursor sets
-# CLAUDE_PLUGIN_ROOT as a Claude-compat shim (verified, see
-# docs/plugin-hooks-per-client.md), so it MUST be detected via CURSOR_* before
-# the CLAUDE_PLUGIN_ROOT check or it is misreported as claude-code. Used by the
-# launcher telemetry event, the MONK_AGENT_LAUNCH_CLIENT hand-off to the agent,
-# and the signin nudge.
-client="unknown"
-if [ -n "${CURSOR_VERSION:-}" ] || [ -n "${CURSOR_PLUGIN_ROOT:-}" ]; then
-  client="cursor"
-elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
-  client="claude-code"
-elif [ -n "${PLUGIN_ROOT:-}" ]; then
-  client="codex"
-fi
-ide_version="${CURSOR_VERSION:-}"
-
-# IPv6 loopback hosts (e.g. ::1, an explicit MONK_AGENT_HOST override) must be
-# bracketed in a URL authority or the port separator is ambiguous.
-url_host="$host"
-case "$url_host" in
-  \[*\]) ;;
-  *:*) url_host="[$url_host]" ;;
-esac
-base_url="http://$url_host:$port"
-health_url="$base_url/.well-known/oauth-protected-resource"
-health_resource="$base_url/mcp"
-
-# Register monk in Antigravity's global MCP config if ~/.gemini/config/ exists.
-# Idempotent — skips if already registered. Uses jq when available; prints
-# manual instructions otherwise.
-register_antigravity_mcp() {
-  gemini_cfg="$HOME/.gemini/config"
-  [ -d "$gemini_cfg" ] || return 0
-  mcp_cfg="$gemini_cfg/mcp_config.json"
-  server_url="$base_url/mcp"
-  # Treat an empty file the same as a missing file to avoid jq/python parse errors.
-  has_existing=0
-  if [ -f "$mcp_cfg" ] && [ -s "$mcp_cfg" ]; then
-    has_existing=1
+ensure_agent_binary() {
+  if [ ! -f "$AGENT_BIN" ]; then
+    echo "Installing monk-agent to $AGENT_DIR..."
+    mkdir -p "$AGENT_DIR"
+    "$SCRIPT_DIR/install-monk-agent.sh"
   fi
-  if [ "$has_existing" = "1" ]; then
-    # Validate before touching the file — a malformed unrelated config must
-    # produce a warning, not abort the launcher after the health check passed.
-    valid=1
-    if command -v jq >/dev/null 2>&1; then
-      jq empty "$mcp_cfg" >/dev/null 2>&1 || valid=0
-    elif command -v python3 >/dev/null 2>&1; then
-      python3 -c "import json; json.load(open('$mcp_cfg'))" >/dev/null 2>&1 || valid=0
+}
+
+stop_old_agent() {
+  if [ -f "$PID_FILE" ]; then
+    old_pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+    if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
+      echo "Stopping old agent (PID $old_pid)..."
+      kill "$old_pid" 2>/dev/null || true
+      
+      wait_count=0
+      while kill -0 "$old_pid" 2>/dev/null && [ $wait_count -lt 30 ]; do
+        sleep 0.1
+        wait_count=$((wait_count + 1))
+      done
+      
+      if kill -0 "$old_pid" 2>/dev/null; then
+        echo "Force killing old agent..."
+        kill -9 "$old_pid" 2>/dev/null || true
+        sleep 0.2
+      fi
     fi
-    if [ "$valid" = "0" ]; then
-      echo "Warning: $mcp_cfg is not valid JSON; skipping automatic Antigravity MCP registration." >&2
-      printf '  Add manually if desired: {"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >&2
+    rm -f "$PID_FILE"
+  fi
+}
+
+check_health() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -sf "http://127.0.0.1:$HEALTH_PORT/health" >/dev/null 2>&1
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q -O- "http://127.0.0.1:$HEALTH_PORT/health" >/dev/null 2>&1
+  else
+    nc -z 127.0.0.1 "$HEALTH_PORT" 2>/dev/null
+  fi
+}
+
+start_with_background_process() {
+  nohup "$AGENT_BIN" >>"$LOG_FILE" 2>&1 &
+  new_pid=$!
+  echo "$new_pid" > "$PID_FILE"
+  
+  echo "Started monk-agent (PID $new_pid), waiting for health check..."
+  
+  elapsed=0
+  while [ $elapsed -lt "$MAX_WAIT" ]; do
+    if ! kill -0 "$new_pid" 2>/dev/null; then
+      echo "ERROR: Agent process $new_pid exited prematurely"
+      rm -f "$PID_FILE"
+      return 1
+    fi
+    
+    if check_health; then
+      if ! kill -0 "$new_pid" 2>/dev/null; then
+        echo "ERROR: Agent process $new_pid exited after health check succeeded"
+        rm -f "$PID_FILE"
+        return 1
+      fi
+      echo "Agent is healthy and running (PID $new_pid)"
       return 0
     fi
-    # Check the structured .mcpServers.monk key, not a whole-file text search —
-    # an unrelated field whose value happens to be the string "monk" must not
-    # be mistaken for an existing registration.
-    already_registered=0
-    if command -v jq >/dev/null 2>&1; then
-      jq -e '.mcpServers.monk != null' "$mcp_cfg" >/dev/null 2>&1 && already_registered=1
-    elif command -v python3 >/dev/null 2>&1; then
-      python3 -c "
-import json, sys
-cfg = json.load(open('$mcp_cfg'))
-servers = cfg.get('mcpServers')
-sys.exit(0 if isinstance(servers, dict) and 'monk' in servers else 1)
-" >/dev/null 2>&1 && already_registered=1
-    else
-      # No JSON tool available to parse structurally; fall back to the
-      # conservative substring guard rather than risk corrupting the file.
-      grep -q '"monk"' "$mcp_cfg" 2>/dev/null && already_registered=1
-    fi
-    [ "$already_registered" = "1" ] && return 0
-  fi
-  tmp="$(mktemp)"
-  if command -v jq >/dev/null 2>&1; then
-    if [ "$has_existing" = "1" ]; then
-      jq --arg u "$server_url" '.mcpServers.monk = {serverUrl: $u}' "$mcp_cfg" >"$tmp"
-    else
-      jq -n --arg u "$server_url" '{mcpServers: {monk: {serverUrl: $u}}}' >"$tmp"
-    fi
-  elif command -v python3 >/dev/null 2>&1; then
-    if [ "$has_existing" = "1" ]; then
-      python3 -c "
-import json, sys
-cfg = json.load(open('$mcp_cfg'))
-servers = cfg.get('mcpServers')
-if not isinstance(servers, dict):
-    servers = {}
-cfg['mcpServers'] = servers
-servers['monk'] = {'serverUrl': '$server_url'}
-json.dump(cfg, sys.stdout, indent=2)
-print()
-" >"$tmp"
-    else
-      printf '{"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >"$tmp"
-    fi
-  else
-    rm -f "$tmp"
-    echo "Add monk to $mcp_cfg to enable Antigravity MCP (jq or python3 required to auto-write):" >&2
-    printf '  {"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >&2
-    return 0
-  fi
-  mv "$tmp" "$mcp_cfg"
-  echo "Registered monk MCP server in $mcp_cfg" >&2
-}
-
-# If the agent is up but the user is not signed in to Monk, print SessionStart
-# context telling the host agent to prompt the user to sign in via /mcp. Without
-# this the host only sees "tools unavailable" and mis-reports it as a connection
-# problem instead of an auth one. Best-effort; never blocks session start.
-#
-# Skippable via MONK_AGENT_SKIP_SIGNIN_NUDGE=1, for callers that already
-# guarantee sign-in out of band and don't need this nudge's own status check.
-emit_signin_nudge() {
-  [ "${MONK_AGENT_SKIP_SIGNIN_NUDGE:-0}" = "1" ] && return 0
-  # /auth.json is the cheap, auth-only status endpoint (~40ms). Deliberately NOT
-  # /status.json, which runs ~10 synchronous install probes (~2s/call and
-  # serializes under concurrent dashboard/MCP load) — that latency pushed this
-  # check past the curl timeout and made the nudge racy.
-  status_url="$base_url/auth.json"
-  body=""
-  # A just-(re)started agent can still report a transient MISS on the first probe
-  # (connection refused during the restart window, or a 500 from a cold macOS
-  # Keychain read that the agent itself retries then surfaces as an error rather
-  # than a false signed-out). Both show up here as an EMPTY body, so retry only on
-  # empty. A non-empty body is a definitive answer — signed in OR out — and must be
-  # acted on immediately: retrying a confirmed signedIn:false just adds ~2s and two
-  # extra probes on precisely the signed-out path this nudge targets.
-  # --max-time is modest because /auth.json is ~40ms; this also bounds how long a
-  # hung endpoint can block the synchronous SessionStart hook (<=3x5+2x1s).
-  attempt=0
-  while [ "$attempt" -lt 3 ]; do
-    if command -v curl >/dev/null 2>&1; then
-      body="$(curl -fsS --noproxy '*' --max-time 5 "$status_url" 2>/dev/null || true)"
-    elif command -v wget >/dev/null 2>&1; then
-      body="$(env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY wget -q -T 5 -O - "$status_url" 2>/dev/null || true)"
-    fi
-    [ -n "$body" ] && break
-    attempt=$((attempt + 1))
-    [ "$attempt" -lt 3 ] && sleep 1
+    
+    sleep 1
+    elapsed=$((elapsed + 1))
   done
-  # Compare on a whitespace-stripped copy: the server's real (pretty-printed)
-  # JSON output may render as `"signedIn": true` with a space, which the exact
-  # substring match below would otherwise miss and misreport as signed-out.
-  compact_body="$(printf '%s' "$body" | tr -d '[:space:]')"
-  case "$compact_body" in
-    *'"signedIn":true'*) return 0 ;;
-  esac
-  # Empty body = read error / 500 / timeout, NOT a confirmed signed-out state —
-  # suppress the nudge. Only an affirmative signedIn:false reaches the nudge below.
-  [ -n "$body" ] || return 0
-  # $client is resolved once at the top of the script (Cursor-aware ordering).
-  nudge_url="$base_url/plugin/nudge?type=signin&client=$client"
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsS --noproxy '*' --max-time 2 -X POST "$nudge_url" >/dev/null 2>&1 || true
-  elif command -v wget >/dev/null 2>&1; then
-    env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY wget -q -T 2 -O - --post-data="" "$nudge_url" >/dev/null 2>&1 || true
-  fi
-  msg="monk-agent is running but you are NOT signed in to Monk. The Monk MCP tools require sign-in. If the user asks to deploy, analyze, or operate anything with Monk, first tell them to run /mcp and authenticate the monk MCP server (this signs them in to Monk). Do NOT describe this as a connection or restart problem, and do NOT deploy via Docker or another platform to work around it."
-  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && command -v jq >/dev/null 2>&1; then
-    jq -n --arg ctx "$msg" \
-      '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $ctx}}'
+  
+  if kill -0 "$new_pid" 2>/dev/null; then
+    echo "ERROR: Agent health check timeout after ${MAX_WAIT}s (PID $new_pid still running)"
+    kill "$new_pid" 2>/dev/null || true
   else
-    printf '%s\n' "$msg"
+    echo "ERROR: Agent process $new_pid exited during health check wait"
   fi
+  rm -f "$PID_FILE"
+  return 1
 }
-
-is_running() {
-  response=""
-  if command -v curl >/dev/null 2>&1; then
-    response="$(curl -fsS --noproxy '*' --max-time 2 "$health_url" 2>/dev/null)" || return 1
-  elif command -v wget >/dev/null 2>&1; then
-    response="$(env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY wget -q -T 2 -O - "$health_url" 2>/dev/null)" || return 1
-  else
-    return 1
-  fi
-  # Require the resource field to equal our own MCP endpoint, not merely be
-  # present — an unrelated service on the same port could otherwise be
-  # mistaken for monk-agent.
-  resource="$(printf '%s\n' "$response" | sed -n 's/.*"resource"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
-  [ "$resource" = "$health_resource" ]
-}
-
-hash_file() {
-  path="$1"
-  if [ ! -f "$path" ]; then
-    printf '\n'
-    return
-  fi
-  if command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$path" | awk '{print $1}'
-    return
-  fi
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$path" | awk '{print $1}'
-    return
-  fi
-  printf '\n'
-}
-
-os="$(uname -s)"
-managed_agent_path="${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent"
-agent_hash_before=""
-managed_agent_ensured=0
-
-# Earliest telemetry signal: fire a plugin_launcher_started beacon straight to
-# PostHog BEFORE ensure/health-check/serve, so plugin activity is visible even if
-# the download fails or the agent crashes on init. The beacon lives in a shared,
-# sourced helper (monk-launcher-telemetry.sh) reused by the Antigravity hook, so
-# the logic stays in one place. Guarded on presence for older rendered plugins
-# and invoked with `|| true` — a failure here must never abort the launch.
-if [ -f "$script_dir/monk-launcher-telemetry.sh" ]; then
-  . "$script_dir/monk-launcher-telemetry.sh"
-  monk_emit_launcher_event "$client" "$ide_version" || true
-fi
-
-if [ -n "${MONK_AGENT_PATH:-}" ]; then
-  agent_path="$MONK_AGENT_PATH"
-elif [ "${MONK_AGENT_SKIP_ENSURE:-0}" = "1" ]; then
-  agent_path="$managed_agent_path"
-else
-  # Only the managed install can have been updated by ensure-monk-agent.sh, so
-  # only compute a before/after hash on that path. Hashing the managed
-  # binary's "before" state against a custom MONK_AGENT_PATH's "after" state
-  # compares two unrelated files -- they always differ, so agent_updated was
-  # always 1 and every session force-restarted a healthy custom companion
-  # (ENG-390).
-  agent_hash_before="$(hash_file "$managed_agent_path")"
-  agent_path="$("$plugin_root/scripts/ensure-monk-agent.sh")"
-  managed_agent_ensured=1
-fi
-
-if [ ! -x "$agent_path" ]; then
-  echo "monk-agent is not executable at $agent_path" >&2
-  exit 2
-fi
-
-agent_updated=0
-if [ "$managed_agent_ensured" = "1" ]; then
-  agent_hash_after="$(hash_file "$agent_path")"
-  if [ -n "$agent_hash_after" ] && [ "$agent_hash_before" != "$agent_hash_after" ]; then
-    agent_updated=1
-  fi
-fi
-
-launchd_configured() {
-  # Deliberately excludes PATH: it is derived from the invoking shell/app and
-  # legitimately differs across hosts (Claude Code, VS Code, plain terminal) and
-  # even across sessions of the same host (nvm/asdf switches, plugin cache
-  # entries). Gating a restart on an exact PATH match meant nearly every new
-  # session tore down an already-running, already-authenticated agent and raced
-  # the cold-start auth read in emit_signin_nudge. PATH is still refreshed
-  # in the plist whenever a real restart happens for another reason.
-  # MONK_PLUGIN_VERSION IS included (unlike PATH): it changes only on a plugin
-  # install/upgrade — rare, stable within a plugin install, and exactly the
-  # moment the agent should restart so telemetry reports the new version. It
-  # cannot cause the per-session restart churn PATH did.
-  [ -f "$launchd_plist" ] &&
-    grep -Fq "<string>$agent_path</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_client_id</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_url</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_audience</string>" "$launchd_plist" &&
-    grep -q "<string>$autospin_url</string>" "$launchd_plist" &&
-    grep -q "<string>${MONK_AGENT_LOCAL:-}</string>" "$launchd_plist" &&
-    grep -q "<string>${MONK_PLUGIN_VERSION:-}</string>" "$launchd_plist"
-}
-
-# The background-process (non-launchd) path has no plist to introspect, so the
-# fields that matter for reuse are persisted to state_file on every start and
-# diffed here. Covers both a stale custom MONK_AGENT_PATH (ENG-390) and
-# drifted auth/autospin config on an otherwise-healthy Linux/other-POSIX
-# companion (ENG-397 -- launchd_configured above already covers macOS).
-background_process_configured() {
-  [ -f "$state_file" ] || return 1
-  state="$(cat "$state_file" 2>/dev/null || true)"
-  printf '%s\n' "$state" | grep -Fxq "agent_path=$agent_path" &&
-    printf '%s\n' "$state" | grep -Fxq "auth_url=$auth_url" &&
-    printf '%s\n' "$state" | grep -Fxq "auth_client_id=$auth_client_id" &&
-    printf '%s\n' "$state" | grep -Fxq "auth_audience=$auth_audience" &&
-    printf '%s\n' "$state" | grep -Fxq "autospin_url=$autospin_url"
-}
-
-if [ "${MONK_AGENT_SKIP_ENSURE:-0}" != "1" ]; then
-  if [ "$os" != "Darwin" ] && [ "$agent_updated" = "0" ] && background_process_configured && is_running; then
-    register_antigravity_mcp
-    emit_signin_nudge
-    exit 0
-  fi
-
-  if [ "$os" = "Darwin" ] && [ "$agent_updated" = "0" ] && is_running && launchd_configured; then
-    register_antigravity_mcp
-    emit_signin_nudge
-    exit 0
-  fi
-fi
 
 start_with_launchd() {
-  mkdir -p "$HOME/Library/LaunchAgents"
-  cat >"$launchd_plist" <<EOF
+  PLIST_PATH="$HOME/Library/LaunchAgents/io.monk.agent.plist"
+  
+  cat > "$PLIST_PATH" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>$launchd_label</string>
+  <string>io.monk.agent</string>
   <key>ProgramArguments</key>
   <array>
-    <string>$agent_path</string>
-    <string>serve</string>
-    <string>--host</string>
-    <string>$host</string>
-    <string>--port</string>
-    <string>$port</string>
+    <string>$AGENT_BIN</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
-  <!-- Respawn on crashes/non-zero exits, but NOT on a clean exit 0. The agent
-       exits 0 when it finds another healthy monk-agent already on the port
-       (see handlePortConflict) so a lost bind race defers instead of hot-looping;
-       a foreign process holding the port exits non-zero and is retried, throttled. -->
   <key>KeepAlive</key>
-  <dict>
-    <key>SuccessfulExit</key>
-    <false/>
-  </dict>
-  <!-- launchd's default throttle floor is 10s; widen it so an unrecoverable
-       failure (e.g. a foreign process pinning the port) costs ~1 relaunch/min
-       instead of ~6, while still self-healing once the port frees. -->
-  <key>ThrottleInterval</key>
-  <integer>60</integer>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>MONK_AUTH_URL</key>
-    <string>$auth_url</string>
-    <key>MONK_AGENT_AUTH_CLIENT_ID</key>
-    <string>$auth_client_id</string>
-    <key>MONK_AUTH_AUDIENCE</key>
-    <string>$auth_audience</string>
-    <key>MONK_AUTOSPIN_URL</key>
-    <string>$autospin_url</string>
-    <key>MONK_AGENT_LOCAL</key>
-    <string>${MONK_AGENT_LOCAL:-}</string>
-    <key>MONK_PLUGIN_VERSION</key>
-    <string>${MONK_PLUGIN_VERSION:-}</string>
-    <!-- Deliberately NOT gated in launchd_configured(): the launching client
-         legitimately differs per session, and gating a restart on it would
-         reintroduce the per-session churn the PATH exclusion comment warns
-         about. On macOS this reflects the client of the last real (re)start. -->
-    <key>MONK_AGENT_LAUNCH_CLIENT</key>
-    <string>$client</string>
-    <key>PATH</key>
-    <string>$agent_path_env</string>
-  </dict>
+  <true/>
   <key>StandardOutPath</key>
-  <string>$log_file</string>
+  <string>$LOG_FILE</string>
   <key>StandardErrorPath</key>
-  <string>$log_file</string>
+  <string>$LOG_FILE</string>
 </dict>
 </plist>
 EOF
 
-  uid="$(id -u)"
-  launchctl bootout "gui/$uid/$launchd_label" >/dev/null 2>&1 || true
-  sleep 1
-  launchctl bootstrap "gui/$uid" "$launchd_plist"
-  launchctl kickstart -k "gui/$uid/$launchd_label" >/dev/null 2>&1 || true
+  launchctl unload "$PLIST_PATH" 2>/dev/null || true
+  launchctl load "$PLIST_PATH"
+  
+  echo "Started monk-agent via launchd, waiting for health check..."
+  
+  elapsed=0
+  while [ $elapsed -lt "$MAX_WAIT" ]; do
+    if check_health; then
+      sleep 1
+      if check_health; then
+        echo "Agent is healthy"
+        return 0
+      fi
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  
+  echo "ERROR: Agent health check timeout after ${MAX_WAIT}s"
+  return 1
 }
 
-start_with_background_process() {
-  if [ -f "$pid_file" ]; then
-    old_pid="$(cat "$pid_file" 2>/dev/null || true)"
-    if [ -n "$old_pid" ]; then
-      kill "$old_pid" >/dev/null 2>&1 || true
+ensure_agent_binary
+
+if [ -f "$PID_FILE" ]; then
+  old_pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+  if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null && check_health; then
+    agent_updated=0
+    if [ -f "$AGENT_DIR/.last-version" ]; then
+      current_hash="$(shasum -a 256 "$AGENT_BIN" 2>/dev/null | cut -d' ' -f1 || true)"
+      last_hash="$(cat "$AGENT_DIR/.last-version" 2>/dev/null || true)"
+      if [ "$current_hash" != "$last_hash" ]; then
+        agent_updated=1
+      fi
+    fi
+    
+    if [ "$agent_updated" = "0" ]; then
+      echo "Agent already running and healthy (PID $old_pid)"
+      exit 0
     fi
   fi
-  export MONK_AUTH_URL="$auth_url"
-  export MONK_AGENT_AUTH_CLIENT_ID="$auth_client_id"
-  export MONK_AUTH_AUDIENCE="$auth_audience"
-  export MONK_AUTOSPIN_URL="$autospin_url"
-  export PATH="$agent_path_env"
-  export MONK_AGENT_LOCAL="${MONK_AGENT_LOCAL:-}"
-  export MONK_PLUGIN_VERSION="${MONK_PLUGIN_VERSION:-}"
-  export MONK_AGENT_LAUNCH_CLIENT="$client"
-  if command -v setsid >/dev/null 2>&1; then
-    setsid "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &
-  elif command -v nohup >/dev/null 2>&1; then
-    nohup "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &
-  else
-    "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &
-  fi
-  pid="$!"
-  printf '%s\n' "$pid" >"$pid_file"
-  {
-    printf 'agent_path=%s\n' "$agent_path"
-    printf 'auth_url=%s\n' "$auth_url"
-    printf 'auth_client_id=%s\n' "$auth_client_id"
-    printf 'auth_audience=%s\n' "$auth_audience"
-    printf 'autospin_url=%s\n' "$autospin_url"
-  } >"$state_file"
-}
+fi
 
-case "$os" in
-  Darwin) start_with_launchd ;;
-  *) start_with_background_process ;;
-esac
+stop_old_agent
 
-ready_deadline=$(( $(date +%s) + ready_timeout ))
-while [ "$(date +%s)" -lt "$ready_deadline" ]; do
-  if is_running; then
-    register_antigravity_mcp
-    emit_signin_nudge
-    exit 0
-  fi
-  # Break early if the background process has exited -- no point waiting for
-  # the readiness deadline.
-  if [ -f "$pid_file" ]; then
-    _pid="$(cat "$pid_file" 2>/dev/null || true)"
-    if [ -n "$_pid" ] && ! kill -0 "$_pid" 2>/dev/null; then
-      break
-    fi
-  fi
-  sleep 1
-done
+if [ "$(uname)" = "Darwin" ] && [ -d "$HOME/Library/LaunchAgents" ]; then
+  start_with_launchd
+else
+  start_with_background_process
+fi
 
-echo "monk-agent did not become ready at $health_url within ${ready_timeout}s." >&2
-echo "Log: $log_file" >&2
-exit 1
+if [ $? -eq 0 ]; then
+  shasum -a 256 "$AGENT_BIN" 2>/dev/null | cut -d' ' -f1 > "$AGENT_DIR/.last-version" 2>/dev/null || true
+fi
