@@ -36,6 +36,17 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "matcher": "monk.cicd.setup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -c \"$PLUGIN_ROOT/scripts/validate-cicd-yaml.sh\"",
+            "commandWindows": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -ExecutionPolicy Bypass -File \"$env:PLUGIN_ROOT\\scripts\\validate-cicd-yaml.ps1\"",
+            "timeout": 15
+          }
+        ]
       }
     ]
   }

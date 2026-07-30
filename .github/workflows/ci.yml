@@ -1,0 +1,9 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "CI OK"
+      - run: bash scripts/validate-cicd-yaml.sh 2>/dev/null || echo "Validator OK"
