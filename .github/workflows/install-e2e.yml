@@ -62,6 +62,10 @@ jobs:
         shell: bash
         run: ./tests/start-monk-agent-readiness-timeout.sh
 
+      - name: Check launcher telemetry JSON escaping
+        shell: bash
+        run: ./tests/monk-launcher-telemetry-json.sh
+
   windows:
     name: windows-latest
     runs-on: windows-latest

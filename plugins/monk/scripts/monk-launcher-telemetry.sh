@@ -92,16 +92,35 @@ monk_emit_launcher_event() {
   _osa="$(uname -m 2>/dev/null || printf unknown)"
   _plat="$(printf '%s' "$_osn" | tr '[:upper:]' '[:lower:]')"
 
-  # Strip characters that would break the hand-built JSON.
-  _msan() { printf '%s' "$1" | tr -d '"\\' | tr -d '\n\r'; }
+  # Encode a shell string as JSON string content. LC_ALL=C makes awk's %c
+  # byte-preserving, so UTF-8 survives while every U+0000-U+001F byte that JSON
+  # forbids is escaped. POSIX od/awk keep this usable before the agent exists.
+  _mjson() {
+    printf '%s' "$1" |
+      LC_ALL=C od -An -v -t u1 2>/dev/null |
+      LC_ALL=C awk '{
+        for (i = 1; i <= NF; i++) {
+          b = $i + 0
+          if (b == 34)       printf "\\\""
+          else if (b == 92)  printf "\\\\"
+          else if (b == 8)   printf "\\b"
+          else if (b == 9)   printf "\\t"
+          else if (b == 10)  printf "\\n"
+          else if (b == 12)  printf "\\f"
+          else if (b == 13)  printf "\\r"
+          else if (b < 32)   printf "\\u%04x", b
+          else               printf "%c", b
+        }
+      }'
+  }
 
   _payload="$(
     printf '{"api_key":"%s","event":"plugin_launcher_started","distinct_id":"%s","properties":{"launch_client":"%s","host_client":"%s","client":"%s","first_start":%s,"agent_installed":%s,"client_id_source":"%s","plugin_version":"%s","ide_version":"%s","platform":"%s","os_arch":"%s","source":"monk-plugin-launcher"}}' \
-      "$(_msan "$_ph_key")" "$(_msan "$_cid")" \
-      "$(_msan "$_mlc")" "$(_msan "$_mlc")" "$(_msan "$_mlc")" \
+      "$(_mjson "$_ph_key")" "$(_mjson "$_cid")" \
+      "$(_mjson "$_mlc")" "$(_mjson "$_mlc")" "$(_mjson "$_mlc")" \
       "$_first_start" "$_agent_installed" "$_cid_src" \
-      "$(_msan "$_pv")" "$(_msan "$_mlc_ide")" \
-      "$(_msan "$_plat")" "$(_msan "$_osa")"
+      "$(_mjson "$_pv")" "$(_mjson "$_mlc_ide")" \
+      "$(_mjson "$_plat")" "$(_mjson "$_osa")"
   )"
 
   if command -v curl >/dev/null 2>&1; then
