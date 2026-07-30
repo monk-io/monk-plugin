@@ -111,7 +111,11 @@ $ChecksumTmp = Join-Path $InstallDir ".monk-agent.tmp.sha256"
 $ExtractDir = Join-Path $InstallDir ".monk-agent.extract"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
-Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumTmp
+# Windows PowerShell 5.1 otherwise delegates response parsing to the Internet
+# Explorer engine, which is unavailable on Server Core and can be uninitialized
+# on fresh desktop profiles. Downloads are files, so always use the independent
+# basic parser.
+Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumTmp -UseBasicParsing
 
 $Expected = ((Get-Content -Raw $ChecksumTmp).Trim() -split "\s+")[0].ToLowerInvariant()
 
@@ -125,7 +129,7 @@ if ((Test-Path $Target) -and (Get-Item $Target).Length -gt 0 -and (Test-Path $Ch
 }
 
 Write-Host "Installing monk-agent from $Url"
-Invoke-WebRequest -Uri $Url -OutFile $ArchiveTmp
+Invoke-WebRequest -Uri $Url -OutFile $ArchiveTmp -UseBasicParsing
 
 $Actual = Get-FileSha256 $ArchiveTmp
 if ($Actual -ne $Expected) {
