@@ -71,6 +71,7 @@ Or, pointing directly at the plugin repo:
 
 ```text
 codex plugin marketplace add monk-io/monk-plugin
+codex plugin add monk@monk-plugins
 ```
 
 Then start `codex`, run `/plugins`, open the `monk-plugins` marketplace, and
