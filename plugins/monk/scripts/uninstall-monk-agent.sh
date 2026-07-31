@@ -106,7 +106,7 @@ stop_agent() {
           if [ -z "$proc_name" ] && command -v ps >/dev/null 2>&1; then
             proc_name="$(ps -p "$pid" -o comm= 2>/dev/null || true)"
           fi
-          if [ -z "$proc_name" ] || [ "$proc_name" = "monk-agent" ]; then
+          if [ -n "$proc_name" ] && [ "$proc_name" = "monk-agent" ]; then
             kill "$pid" >/dev/null 2>&1 || true
           fi
         fi
