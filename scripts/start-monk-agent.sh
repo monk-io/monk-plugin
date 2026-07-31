@@ -465,26 +465,37 @@ start_with_background_process() {
 
 case "$os" in
   Darwin) start_with_launchd ;;
-  *) start_with_background_process ;;
+  *)
+    max_retries="${MONK_AGENT_MAX_RETRIES:-3}"
+    case "$max_retries" in
+      ''|*[!0-9]*) max_retries=3 ;;
+    esac
+    retry_count=0
+    while [ "$retry_count" -lt "$max_retries" ]; do
+      start_with_background_process
+      ready_deadline=$(( $(date +%s) + ready_timeout ))
+      while [ "$(date +%s)" -lt "$ready_deadline" ]; do
+        if is_running; then
+          register_antigravity_mcp
+          emit_signin_nudge
+          exit 0
+        fi
+        if [ -f "$pid_file" ]; then
+          _pid="$(cat "$pid_file" 2>/dev/null || true)"
+          if [ -n "$_pid" ] && ! kill -0 "$_pid" 2>/dev/null; then
+            break
+          fi
+        fi
+        sleep 1
+      done
+      retry_count=$((retry_count + 1))
+      if [ "$retry_count" -lt "$max_retries" ]; then
+        echo "monk-agent exited before becoming healthy (likely port conflict), retrying ($retry_count/$max_retries)..." >&2
+        sleep $((retry_count * 10))
+      fi
+    done
+    ;;
 esac
-
-ready_deadline=$(( $(date +%s) + ready_timeout ))
-while [ "$(date +%s)" -lt "$ready_deadline" ]; do
-  if is_running; then
-    register_antigravity_mcp
-    emit_signin_nudge
-    exit 0
-  fi
-  # Break early if the background process has exited -- no point waiting for
-  # the readiness deadline.
-  if [ -f "$pid_file" ]; then
-    _pid="$(cat "$pid_file" 2>/dev/null || true)"
-    if [ -n "$_pid" ] && ! kill -0 "$_pid" 2>/dev/null; then
-      break
-    fi
-  fi
-  sleep 1
-done
 
 echo "monk-agent did not become ready at $health_url within ${ready_timeout}s." >&2
 echo "Log: $log_file" >&2
