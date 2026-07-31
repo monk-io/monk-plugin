@@ -320,13 +320,13 @@ launchd_configured() {
   # moment the agent should restart so telemetry reports the new version. It
   # cannot cause the per-session restart churn PATH did.
   [ -f "$launchd_plist" ] &&
-    grep -Fq "<string>$agent_path</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_client_id</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_url</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_audience</string>" "$launchd_plist" &&
-    grep -q "<string>$autospin_url</string>" "$launchd_plist" &&
-    grep -q "<string>${MONK_AGENT_LOCAL:-}</string>" "$launchd_plist" &&
-    grep -q "<string>${MONK_PLUGIN_VERSION:-}</string>" "$launchd_plist"
+    grep -Fq "<string>$esc_agent_path</string>" "$launchd_plist" &&
+    grep -q "<string>$esc_auth_client_id</string>" "$launchd_plist" &&
+    grep -q "<string>$esc_auth_url</string>" "$launchd_plist" &&
+    grep -q "<string>$esc_auth_audience</string>" "$launchd_plist" &&
+    grep -q "<string>$esc_autospin_url</string>" "$launchd_plist" &&
+    grep -q "<string>$esc_monk_agent_local</string>" "$launchd_plist" &&
+    grep -q "<string>$esc_monk_plugin_version</string>" "$launchd_plist"
 }
 
 # The background-process (non-launchd) path has no plist to introspect, so the
@@ -358,7 +358,23 @@ if [ "${MONK_AGENT_SKIP_ENSURE:-0}" != "1" ]; then
   fi
 fi
 
+# XML-escape dynamic values before writing them into the launchd plist (ENG-181).
+# Without this, a MONK_AGENT_PATH containing &, <, >, " or ' produces
+# malformed XML that launchd silently rejects, leaving the agent unmanaged.
+xml_escape() {
+  printf '%%s' "$1" | sed 's/\&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g; s/'"'"'/\&apos;/g'
+}
+
 start_with_launchd() {
+  esc_agent_path="$(xml_escape "$agent_path")"
+  esc_host="$(xml_escape "$host")"
+  esc_auth_url="$(xml_escape "$auth_url")"
+  esc_auth_client_id="$(xml_escape "$auth_client_id")"
+  esc_auth_audience="$(xml_escape "$auth_audience")"
+  esc_autospin_url="$(xml_escape "$autospin_url")"
+  esc_agent_path_env="$(xml_escape "$agent_path_env")"
+  esc_monk_agent_local="$(xml_escape "${MONK_AGENT_LOCAL:-}")"
+  esc_monk_plugin_version="$(xml_escape "${MONK_PLUGIN_VERSION:-}")"
   mkdir -p "$HOME/Library/LaunchAgents"
   cat >"$launchd_plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -369,10 +385,10 @@ start_with_launchd() {
   <string>$launchd_label</string>
   <key>ProgramArguments</key>
   <array>
-    <string>$agent_path</string>
+    <string>$esc_agent_path</string>
     <string>serve</string>
     <string>--host</string>
-    <string>$host</string>
+    <string>$esc_host</string>
     <string>--port</string>
     <string>$port</string>
   </array>
@@ -395,17 +411,17 @@ start_with_launchd() {
   <key>EnvironmentVariables</key>
   <dict>
     <key>MONK_AUTH_URL</key>
-    <string>$auth_url</string>
+    <string>$esc_auth_url</string>
     <key>MONK_AGENT_AUTH_CLIENT_ID</key>
-    <string>$auth_client_id</string>
+    <string>$esc_auth_client_id</string>
     <key>MONK_AUTH_AUDIENCE</key>
-    <string>$auth_audience</string>
+    <string>$esc_auth_audience</string>
     <key>MONK_AUTOSPIN_URL</key>
-    <string>$autospin_url</string>
+    <string>$esc_autospin_url</string>
     <key>MONK_AGENT_LOCAL</key>
-    <string>${MONK_AGENT_LOCAL:-}</string>
+    <string>$esc_monk_agent_local</string>
     <key>MONK_PLUGIN_VERSION</key>
-    <string>${MONK_PLUGIN_VERSION:-}</string>
+    <string>$esc_monk_plugin_version</string>
     <!-- Deliberately NOT gated in launchd_configured(): the launching client
          legitimately differs per session, and gating a restart on it would
          reintroduce the per-session churn the PATH exclusion comment warns
@@ -413,7 +429,7 @@ start_with_launchd() {
     <key>MONK_AGENT_LAUNCH_CLIENT</key>
     <string>$client</string>
     <key>PATH</key>
-    <string>$agent_path_env</string>
+    <string>$esc_agent_path_env</string>
   </dict>
   <key>StandardOutPath</key>
   <string>$log_file</string>
