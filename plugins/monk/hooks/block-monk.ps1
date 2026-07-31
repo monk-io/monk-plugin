@@ -16,7 +16,10 @@ $agent = if ($env:MONK_AGENT_PATH) { $env:MONK_AGENT_PATH } else { Join-Path $ag
 # reads raw UTF-8 (BOM-tolerant) from the inherited stdin and is unaffected.
 if (Test-Path $agent) {
   & $agent hook block-monk --format claude
-  exit $LASTEXITCODE
+  if ($LASTEXITCODE -eq 0) { exit 0 }
+  # Binary errored — fall through to fallback instead of failing open (ENG-100).
+  # A non-zero exit from the helper previously propagated to the host, which
+  # interprets any non-deny result as "allow", letting `monk` commands through.
 }
 
 # Fallback: binary unavailable. Read stdin as UTF-8 (BOM stripped) so the payload

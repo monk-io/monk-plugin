@@ -25,6 +25,9 @@ if [ -x "$agent" ]; then
   if printf '%s' "$input" | "$agent" hook block-monk --format claude; then
     exit 0
   fi
+  # Binary errored — fall through to fallback instead of failing open (ENG-100).
+  # A non-zero exit from the helper previously propagated to the host, which
+  # interprets any non-deny result as "allow", letting `monk` commands through.
 fi
 
 # Fallback: binary unavailable. No jq here, so pull just the `command` string
