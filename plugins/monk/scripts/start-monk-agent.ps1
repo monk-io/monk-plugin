@@ -399,3 +399,38 @@ while ($ReadyTimer.Elapsed.TotalSeconds -lt $ReadyTimeoutSec) {
 
 Write-Error "monk-agent did not become ready at $HealthUrl within ${ReadyTimeoutSec}s. Logs: $LogOut, $LogErr"
 exit 1
+
+# Propagate proxy settings to WSL monkd service (#151)
+# The monkd systemd service inside WSL does not inherit proxy settings from
+# the Windows host. This writes HTTP_PROXY/HTTPS_PROXY/NO_PROXY to the WSL
+# distro's /etc/environment so the monkd service can reach external registries.
+function Invoke-WslProxyPropagation {
+    param([string]$Distro)
+    if (-not $Distro) { return }
+    if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) { return }
+    $proxyKeys = @("HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy")
+    foreach ($pk in $proxyKeys) {
+        $pv = [Environment]::GetEnvironmentVariable($pk, "Process")
+        if ($pv) {
+            try {
+                wsl.exe -d $Distro --user root -- bash -c "echo 'export $pk="$pv"' >> /etc/environment" 2>$null
+            } catch { }
+        }
+    }
+}
+
+# Detect WSL distro and propagate proxy settings
+$wslDistros = @()
+try {
+    $rawDistros = (wsl.exe -l -q) -replace [char]0, ""
+    $wslDistros = $rawDistros -split "?
+" | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+} catch { }
+$wslDistro = if ($wslDistros -contains "Ubuntu-Monk") {
+    "Ubuntu-Monk"
+} elseif ($wslDistros.Count -gt 0) {
+    $wslDistros | Where-Object { $_ -match "^Ubuntu" } | Select-Object -First 1
+} else { "" }
+if ($wslDistro) {
+    Invoke-WslProxyPropagation -Distro $wslDistro
+}
