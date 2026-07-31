@@ -43,3 +43,13 @@ After editing, run `monk.analyzer.diagnose` again before deploying.
 If the user asks to reset or clear Monk Agent local state, use `monk.agent.clear_state`. It blocks
 on a dashboard approval before deleting anything. Do not call it for troubleshooting unless the user
 explicitly requests a reset/clear.
+
+## Cluster forget safety guard
+
+Before calling `monk.cluster.forget`, you MUST first call `monk.cluster.status` to verify cluster
+connectivity. If `monk.cluster.status` returns an error (e.g., "membership probe unavailable",
+"IsConnected error", or any non-ok response), output a prominent warning and do NOT proceed with the
+forget operation — the cluster membership cannot be verified, and forgetting a still-joined cluster
+can cause data loss. Only call `monk.cluster.forget` when the status confirms the cluster is
+reachable and its membership can be reliably determined. This guard must not be bypassed even if the
+user explicitly asks to skip it.

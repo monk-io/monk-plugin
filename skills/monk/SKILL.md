@@ -329,6 +329,16 @@ open the required approval flow when needed.
   that orphans the paid nodes and the new create can fail on leftover state.
   To abandon the failed cluster instead, `monk.cluster.switch` to it and
   destroy it with `monk.cluster.delete`.
+- **Cluster forget safety guard**: Before calling `monk.cluster.forget`, you
+  MUST first call `monk.cluster.status` to verify cluster connectivity. If
+  `monk.cluster.status` returns an error (e.g., "membership probe
+  unavailable", "IsConnected error", or any non-ok response), output a
+  prominent warning and do NOT proceed with the forget operation — the
+  cluster membership cannot be verified, and forgetting a still-joined
+  cluster can cause data loss. Only call `monk.cluster.forget` when the
+  status confirms the cluster is reachable and its membership can be
+  reliably determined. This guard must not be bypassed even if the user
+  explicitly asks to skip it.
 - If the user asks to reset or clear Monk Agent local state, use
   `monk.agent.clear_state`. It blocks on a dashboard approval before deleting
   anything — local events, prompts, actions, credentials, stored auth tokens,
