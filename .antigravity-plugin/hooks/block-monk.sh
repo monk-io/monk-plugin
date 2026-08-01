@@ -52,7 +52,11 @@ raw_command="$(printf '%s' "$input" |
 # to a real newline first (same for \r).
 raw_command="$(printf '%s' "$raw_command" | awk '{gsub(/\\n/, "\n"); gsub(/\\r/, "\r"); print}')"
 normalized="$(printf '%s' "$raw_command" | tr -d '\\' | tr -d '"' | tr -d "'")"
-if printf '%s' "$normalized" | grep -Eq '(^|[;&|`(){}])[[:space:]]*(sudo|command|env|exec|nohup|time|nice)?[[:space:]]*([^[:space:];&|`(){}]*[/\\])?monkd?(\.(exe|cmd|bat|ps1))?([[:space:]]|$)'; then
+# Shell variable assignments may precede a command directly or follow wrappers
+# such as `env`. Treat assignments and wrappers as repeatable prefix tokens so
+# `A=1 monk`, `env A=1 monk`, and `command env A=1 monk` cannot bypass the
+# degraded guard.
+if printf '%s' "$normalized" | grep -Eq '(^|[;&|`(){}])[[:space:]]*(([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|`(){}]*|(sudo|command|env|exec|nohup|time|nice))[[:space:]]+)*([^[:space:];&|`(){}]*[/\\])?monkd?(\.(exe|cmd|bat|ps1))?([[:space:]]|$)'; then
   cat <<'JSON'
 {
   "decision": "deny",
