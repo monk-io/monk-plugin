@@ -111,7 +111,7 @@ $ChecksumTmp = Join-Path $InstallDir ".monk-agent.tmp.sha256"
 $ExtractDir = Join-Path $InstallDir ".monk-agent.extract"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
-Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumTmp
+Invoke-WebRequest -Uri $ChecksumUrl -UseBasicParsing -OutFile $ChecksumTmp
 
 $Expected = ((Get-Content -Raw $ChecksumTmp).Trim() -split "\s+")[0].ToLowerInvariant()
 
@@ -125,7 +125,7 @@ if ((Test-Path $Target) -and (Get-Item $Target).Length -gt 0 -and (Test-Path $Ch
 }
 
 Write-Host "Installing monk-agent from $Url"
-Invoke-WebRequest -Uri $Url -OutFile $ArchiveTmp
+Invoke-WebRequest -Uri $Url -UseBasicParsing -OutFile $ArchiveTmp
 
 $Actual = Get-FileSha256 $ArchiveTmp
 if ($Actual -ne $Expected) {
