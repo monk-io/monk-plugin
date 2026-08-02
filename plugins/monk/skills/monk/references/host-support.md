@@ -1,12 +1,13 @@
 # Host Support
 
-MVP support is limited to Claude Code, OpenAI Codex, and Cursor.
+MVP support is limited to Claude Code, OpenAI Codex, Cursor, and Google Antigravity.
 
 | Host                       | MVP status  | Notes                                                                            |
 | -------------------------- | ----------- | -------------------------------------------------------------------------------- |
 | Claude Code                | Target      | Uses skill, subagents, shell guard hook, and MANIFEST/template diagnostics hook. |
 | OpenAI Codex               | Target      | Uses skill and `monk-agent` MCP endpoint.                                        |
 | Cursor                     | Target      | Uses skill/plugin manifest and `monk-agent` MCP endpoint.                        |
+| Google Antigravity          | Target      | Uses skill, `monk-agent` MCP endpoint (global MCP config), and PreInvocation cold-start hooks. |
 | GitHub Copilot / VS Code   | Placeholder | Manifest exists, but MVP does not depend on `../vscode-monk`.                    |
 | Other Agent Skills clients | Best effort | Skill text may work, but hooks/subagents/MCP behavior is untested.               |
 
