@@ -111,6 +111,9 @@ $env:MONK_AUTH_URL = if ($env:MONK_AUTH_URL) { $env:MONK_AUTH_URL } else { "http
 $env:MONK_AGENT_AUTH_CLIENT_ID = if ($env:MONK_AGENT_AUTH_CLIENT_ID) { $env:MONK_AGENT_AUTH_CLIENT_ID } else { "UW84YWcJME3buMSLfqLX8IbBsYdNWi47" }
 $env:MONK_AUTH_AUDIENCE = if ($env:MONK_AUTH_AUDIENCE) { $env:MONK_AUTH_AUDIENCE } else { "oaknode.com" }
 $env:MONK_AUTOSPIN_URL = if ($env:MONK_AUTOSPIN_URL) { $env:MONK_AUTOSPIN_URL } else { "wss://api.app.monk.io/autospin/" }
+$env:MONK_AGENT_LOCAL = if ($env:MONK_AGENT_LOCAL) { $env:MONK_AGENT_LOCAL } else { "" }
+$env:MONK_PLUGIN_VERSION = if ($env:MONK_PLUGIN_VERSION) { $env:MONK_PLUGIN_VERSION } else { "" }
+$env:MONK_AGENT_LAUNCH_CLIENT = if ($env:MONK_AGENT_LAUNCH_CLIENT) { $env:MONK_AGENT_LAUNCH_CLIENT } else { "antigravity" }
 
 $Process = $null
 try {
