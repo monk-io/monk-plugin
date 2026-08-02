@@ -38,6 +38,26 @@ jobs:
           test "$installed" = "$MONK_AGENT_INSTALL_DIR/monk-agent"
           test -x "$installed"
 
+      - name: Reuse installed agent when update endpoint is unavailable
+        shell: bash
+        env:
+          MONK_AGENT_INSTALL_DIR: ${{ runner.temp }}/monk-bin
+          MONK_AGENT_DOWNLOAD_BASE: http://127.0.0.1:1
+        run: |
+          set -euo pipefail
+          installed="$(./scripts/ensure-monk-agent.sh)"
+          test "$installed" = "$MONK_AGENT_INSTALL_DIR/monk-agent"
+
+          corrupt="$RUNNER_TEMP/monk-corrupt-bin"
+          mkdir -p "$corrupt"
+          cp "$MONK_AGENT_INSTALL_DIR/monk-agent" "$corrupt/monk-agent"
+          cp "$MONK_AGENT_INSTALL_DIR/monk-agent.sha256" "$corrupt/monk-agent.sha256"
+          printf '\ncorrupt' >> "$corrupt/monk-agent"
+          if MONK_AGENT_INSTALL_DIR="$corrupt" ./scripts/ensure-monk-agent.sh >/dev/null 2>&1; then
+            echo "offline fallback accepted a binary that does not match its stored checksum" >&2
+            exit 1
+          fi
+
       - name: Run monk-agent status
         shell: bash
         env:
@@ -90,6 +110,36 @@ jobs:
           }
           if (-not (Test-Path $installed)) {
             throw "monk-agent.exe was not installed"
+          }
+
+      - name: Reuse installed agent when update endpoint is unavailable
+        shell: pwsh
+        env:
+          MONK_AGENT_INSTALL_DIR: ${{ runner.temp }}\monk-bin
+          MONK_AGENT_DOWNLOAD_BASE: http://127.0.0.1:1
+        run: |
+          $installed = .\scripts\ensure-monk-agent.ps1
+          if ($installed -ne "$env:MONK_AGENT_INSTALL_DIR\monk-agent.exe") {
+            throw "unexpected offline fallback path: $installed"
+          }
+
+          $corrupt = "$env:RUNNER_TEMP\monk-corrupt-bin"
+          New-Item -ItemType Directory -Force -Path $corrupt | Out-Null
+          Copy-Item "$env:MONK_AGENT_INSTALL_DIR\monk-agent.exe" "$corrupt\monk-agent.exe"
+          Copy-Item "$env:MONK_AGENT_INSTALL_DIR\monk-agent.sha256" "$corrupt\monk-agent.sha256"
+          [IO.File]::AppendAllText("$corrupt\monk-agent.exe", "corrupt")
+          $originalInstallDir = $env:MONK_AGENT_INSTALL_DIR
+          $rejected = $false
+          try {
+            $env:MONK_AGENT_INSTALL_DIR = $corrupt
+            .\scripts\ensure-monk-agent.ps1 | Out-Null
+          } catch {
+            $rejected = $true
+          } finally {
+            $env:MONK_AGENT_INSTALL_DIR = $originalInstallDir
+          }
+          if (-not $rejected) {
+            throw "offline fallback accepted a binary that does not match its stored checksum"
           }
 
       - name: Run monk-agent status
