@@ -5,6 +5,7 @@ param(
 $ErrorActionPreference = "Stop"
 $WindowsPowerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 $RootHook = Join-Path $RepoRoot "hooks\block-monk.ps1"
+$PluginHook = Join-Path $RepoRoot "plugins\monk\hooks\block-monk.ps1"
 $AntigravityHook = Join-Path $RepoRoot ".antigravity-plugin\hooks\block-monk.ps1"
 $MissingAgent = Join-Path $env:TEMP "missing-monk-agent-$PID.exe"
 $PreviousAgentPath = $env:MONK_AGENT_PATH
@@ -58,12 +59,19 @@ function Assert-HookCases {
 }
 
 try {
-  $env:MONK_AGENT_PATH = $MissingAgent
-
-  Assert-HookCases -Hook $RootHook -Format "claude"
+  foreach ($AgentPath in @(
+    $MissingAgent,
+    (Join-Path $env:SystemRoot "System32\net.exe"),
+    (Join-Path $env:SystemRoot "System32\cmd.exe")
+  )) {
+    $env:MONK_AGENT_PATH = $AgentPath
+    Assert-HookCases -Hook $RootHook -Format "claude"
+    Assert-HookCases -Hook $PluginHook -Format "claude"
+  }
 
   # Antigravity runs both hook siblings when bash is available. Limit PATH so
   # this test exercises the stock-Windows PowerShell fallback specifically.
+  $env:MONK_AGENT_PATH = $MissingAgent
   $env:Path = Split-Path -Parent $WindowsPowerShell
   Assert-HookCases -Hook $AntigravityHook -Format "antigravity"
 } finally {
