@@ -145,9 +145,9 @@ remove_runtime_linux() {
     sudo systemctl daemon-reload >/dev/null 2>&1 || true
   fi
   if command -v apt-get >/dev/null 2>&1 && dpkg-query -W monk >/dev/null 2>&1; then
-    sudo apt-get remove -y monk
+    sudo apt-get remove -y monk || true
   elif command -v dnf >/dev/null 2>&1 && rpm -q monk >/dev/null 2>&1; then
-    sudo dnf remove -y monk
+    sudo dnf remove -y monk || true
   fi
 }
 
