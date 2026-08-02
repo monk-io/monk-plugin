@@ -17,7 +17,19 @@ $Cases = @(
   @{ Name = "brace"; Command = "{ monk deploy; }"; Denied = $true },
   @{ Name = "newline-sudo"; Command = "echo ok`nsudo monk deploy"; Denied = $true },
   @{ Name = "similar-command"; Command = "monkey deploy"; Denied = $false },
-  @{ Name = "argument"; Command = "grep monk README.md"; Denied = $false }
+  @{ Name = "argument"; Command = "grep monk README.md"; Denied = $false },
+  # ENG-412: quoted/escaped monk no longer defeats detection.
+  @{ Name = "quoted"; Command = '"monk" deploy'; Denied = $true },
+  @{ Name = "escaped"; Command = 'm\onk deploy'; Denied = $true },
+  # ENG-444: wrapper-prefixed and path-qualified monk invocations.
+  @{ Name = "wrapper-command"; Command = "command monk deploy"; Denied = $true },
+  @{ Name = "wrapper-env"; Command = "env monk deploy"; Denied = $true },
+  @{ Name = "wrapper-powershell"; Command = "powershell.exe -Command monk deploy"; Denied = $true },
+  @{ Name = "path-qualified"; Command = "/usr/local/bin/monk deploy"; Denied = $true },
+  # ENG-448: the monkd daemon binary is blocked too, but monkdb (a different
+  # program) is not — the trailing boundary still requires whitespace/EOL.
+  @{ Name = "monkd"; Command = "monkd status"; Denied = $true },
+  @{ Name = "monkdb-lookalike"; Command = "monkdb migrate"; Denied = $false }
 )
 
 function Assert-HookCases {

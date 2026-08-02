@@ -160,8 +160,46 @@ remove_runtime() {
   esac
 }
 
+# Remove the mcpServers.monk entry this launcher adds to Antigravity's global
+# config (see register_antigravity_mcp() in start-monk-agent.sh), preserving
+# unrelated servers, so a dead MCP registration doesn't outlive the uninstall.
+remove_antigravity_mcp() {
+  mcp_cfg="$home_dir/.gemini/config/mcp_config.json"
+  [ -f "$mcp_cfg" ] || return 0
+  if command -v jq >/dev/null 2>&1; then
+    jq empty "$mcp_cfg" >/dev/null 2>&1 || return 0
+    tmp="$(mktemp)"
+    if jq 'if .mcpServers.monk != null then
+             .mcpServers |= del(.monk) |
+             (if (.mcpServers | length) == 0 then del(.mcpServers) else . end)
+           else . end' "$mcp_cfg" >"$tmp" 2>/dev/null; then
+      mv "$tmp" "$mcp_cfg"
+    else
+      rm -f "$tmp"
+    fi
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c "
+import json
+try:
+    with open('$mcp_cfg') as f:
+        cfg = json.load(f)
+except (OSError, ValueError):
+    raise SystemExit(0)
+servers = cfg.get('mcpServers')
+if isinstance(servers, dict) and 'monk' in servers:
+    del servers['monk']
+    if not servers:
+        cfg.pop('mcpServers', None)
+    with open('$mcp_cfg', 'w') as f:
+        json.dump(cfg, f, indent=2)
+        f.write('\n')
+" 2>/dev/null || true
+  fi
+}
+
 stop_agent
 remove_agent_files
+remove_antigravity_mcp
 if [ "$remove_runtime" = "1" ]; then
   remove_runtime
 fi

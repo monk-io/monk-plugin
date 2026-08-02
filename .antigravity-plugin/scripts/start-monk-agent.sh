@@ -10,6 +10,19 @@ autospin_url="${MONK_AUTOSPIN_URL:-wss://api.app.monk.io/autospin/}"
 agent_path_env="${PATH:-/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}"
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 
+# Host hooks terminate this launcher after 180 seconds. Keep readiness work
+# below that deadline so startup failures can print their own diagnostics
+# instead of being killed mid-wait (ENG-410).
+ready_timeout="${MONK_AGENT_READY_TIMEOUT:-150}"
+case "$ready_timeout" in
+  ''|*[!0-9]*) ready_timeout=150 ;;
+esac
+if [ "$ready_timeout" -lt 1 ]; then
+  ready_timeout=1
+elif [ "$ready_timeout" -gt 150 ]; then
+  ready_timeout=150
+fi
+
 # Rendered at plugin build time; carries MONK_PLUGIN_VERSION so the agent can
 # report the real plugin version in telemetry. Guarded: an older rendered
 # plugin without the file must still launch (the agent falls back to a labeled
@@ -42,6 +55,7 @@ log_dir="$data_dir/logs"
 run_dir="$data_dir/run"
 log_file="$log_dir/monk-agent.log"
 pid_file="$run_dir/monk-agent.pid"
+state_file="$run_dir/monk-agent.state"
 launchd_label="io.monk.agent"
 launchd_plist="$HOME/Library/LaunchAgents/$launchd_label.plist"
 
@@ -63,7 +77,16 @@ elif [ -n "${PLUGIN_ROOT:-}" ]; then
 fi
 ide_version="${CURSOR_VERSION:-}"
 
-health_url="http://$host:$port/.well-known/oauth-protected-resource"
+# IPv6 loopback hosts (e.g. ::1, an explicit MONK_AGENT_HOST override) must be
+# bracketed in a URL authority or the port separator is ambiguous.
+url_host="$host"
+case "$url_host" in
+  \[*\]) ;;
+  *:*) url_host="[$url_host]" ;;
+esac
+base_url="http://$url_host:$port"
+health_url="$base_url/.well-known/oauth-protected-resource"
+health_resource="$base_url/mcp"
 
 # Register monk in Antigravity's global MCP config if ~/.gemini/config/ exists.
 # Idempotent — skips if already registered. Uses jq when available; prints
@@ -72,14 +95,45 @@ register_antigravity_mcp() {
   gemini_cfg="$HOME/.gemini/config"
   [ -d "$gemini_cfg" ] || return 0
   mcp_cfg="$gemini_cfg/mcp_config.json"
-  server_url="http://$host:$port/mcp"
-  if [ -f "$mcp_cfg" ] && grep -q '"monk"' "$mcp_cfg" 2>/dev/null; then
-    return 0
-  fi
+  server_url="$base_url/mcp"
   # Treat an empty file the same as a missing file to avoid jq/python parse errors.
   has_existing=0
   if [ -f "$mcp_cfg" ] && [ -s "$mcp_cfg" ]; then
     has_existing=1
+  fi
+  if [ "$has_existing" = "1" ]; then
+    # Validate before touching the file — a malformed unrelated config must
+    # produce a warning, not abort the launcher after the health check passed.
+    valid=1
+    if command -v jq >/dev/null 2>&1; then
+      jq empty "$mcp_cfg" >/dev/null 2>&1 || valid=0
+    elif command -v python3 >/dev/null 2>&1; then
+      python3 -c "import json; json.load(open('$mcp_cfg'))" >/dev/null 2>&1 || valid=0
+    fi
+    if [ "$valid" = "0" ]; then
+      echo "Warning: $mcp_cfg is not valid JSON; skipping automatic Antigravity MCP registration." >&2
+      printf '  Add manually if desired: {"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >&2
+      return 0
+    fi
+    # Check the structured .mcpServers.monk key, not a whole-file text search —
+    # an unrelated field whose value happens to be the string "monk" must not
+    # be mistaken for an existing registration.
+    already_registered=0
+    if command -v jq >/dev/null 2>&1; then
+      jq -e '.mcpServers.monk != null' "$mcp_cfg" >/dev/null 2>&1 && already_registered=1
+    elif command -v python3 >/dev/null 2>&1; then
+      python3 -c "
+import json, sys
+cfg = json.load(open('$mcp_cfg'))
+servers = cfg.get('mcpServers')
+sys.exit(0 if isinstance(servers, dict) and 'monk' in servers else 1)
+" >/dev/null 2>&1 && already_registered=1
+    else
+      # No JSON tool available to parse structurally; fall back to the
+      # conservative substring guard rather than risk corrupting the file.
+      grep -q '"monk"' "$mcp_cfg" 2>/dev/null && already_registered=1
+    fi
+    [ "$already_registered" = "1" ] && return 0
   fi
   tmp="$(mktemp)"
   if command -v jq >/dev/null 2>&1; then
@@ -127,7 +181,7 @@ emit_signin_nudge() {
   # /status.json, which runs ~10 synchronous install probes (~2s/call and
   # serializes under concurrent dashboard/MCP load) — that latency pushed this
   # check past the curl timeout and made the nudge racy.
-  status_url="http://$host:$port/auth.json"
+  status_url="$base_url/auth.json"
   body=""
   # A just-(re)started agent can still report a transient MISS on the first probe
   # (connection refused during the restart window, or a 500 from a cold macOS
@@ -141,26 +195,30 @@ emit_signin_nudge() {
   attempt=0
   while [ "$attempt" -lt 3 ]; do
     if command -v curl >/dev/null 2>&1; then
-      body="$(curl -fsS --max-time 5 "$status_url" 2>/dev/null || true)"
+      body="$(curl -fsS --noproxy '*' --max-time 5 "$status_url" 2>/dev/null || true)"
     elif command -v wget >/dev/null 2>&1; then
-      body="$(wget -q -T 5 -O - "$status_url" 2>/dev/null || true)"
+      body="$(env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY wget -q -T 5 -O - "$status_url" 2>/dev/null || true)"
     fi
     [ -n "$body" ] && break
     attempt=$((attempt + 1))
     [ "$attempt" -lt 3 ] && sleep 1
   done
-  case "$body" in
+  # Compare on a whitespace-stripped copy: the server's real (pretty-printed)
+  # JSON output may render as `"signedIn": true` with a space, which the exact
+  # substring match below would otherwise miss and misreport as signed-out.
+  compact_body="$(printf '%s' "$body" | tr -d '[:space:]')"
+  case "$compact_body" in
     *'"signedIn":true'*) return 0 ;;
   esac
   # Empty body = read error / 500 / timeout, NOT a confirmed signed-out state —
   # suppress the nudge. Only an affirmative signedIn:false reaches the nudge below.
   [ -n "$body" ] || return 0
   # $client is resolved once at the top of the script (Cursor-aware ordering).
-  nudge_url="http://$host:$port/plugin/nudge?type=signin&client=$client"
+  nudge_url="$base_url/plugin/nudge?type=signin&client=$client"
   if command -v curl >/dev/null 2>&1; then
-    curl -fsS --max-time 2 -X POST "$nudge_url" >/dev/null 2>&1 || true
+    curl -fsS --noproxy '*' --max-time 2 -X POST "$nudge_url" >/dev/null 2>&1 || true
   elif command -v wget >/dev/null 2>&1; then
-    wget -q -T 2 -O - --post-data="" "$nudge_url" >/dev/null 2>&1 || true
+    env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY wget -q -T 2 -O - --post-data="" "$nudge_url" >/dev/null 2>&1 || true
   fi
   msg="monk-agent is running but you are NOT signed in to Monk. The Monk MCP tools require sign-in. If the user asks to deploy, analyze, or operate anything with Monk, first tell them to run /mcp and authenticate the monk MCP server (this signs them in to Monk). Do NOT describe this as a connection or restart problem, and do NOT deploy via Docker or another platform to work around it."
   if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && command -v jq >/dev/null 2>&1; then
@@ -172,15 +230,19 @@ emit_signin_nudge() {
 }
 
 is_running() {
+  response=""
   if command -v curl >/dev/null 2>&1; then
-    curl -fsS --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
-    return $?
+    response="$(curl -fsS --noproxy '*' --max-time 2 "$health_url" 2>/dev/null)" || return 1
+  elif command -v wget >/dev/null 2>&1; then
+    response="$(env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY wget -q -T 2 -O - "$health_url" 2>/dev/null)" || return 1
+  else
+    return 1
   fi
-  if command -v wget >/dev/null 2>&1; then
-    wget -q -T 2 -O - "$health_url" 2>/dev/null | grep -q '"resource"'
-    return $?
-  fi
-  return 1
+  # Require the resource field to equal our own MCP endpoint, not merely be
+  # present — an unrelated service on the same port could otherwise be
+  # mistaken for monk-agent.
+  resource="$(printf '%s\n' "$response" | sed -n 's/.*"resource"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+  [ "$resource" = "$health_resource" ]
 }
 
 hash_file() {
@@ -202,7 +264,8 @@ hash_file() {
 
 os="$(uname -s)"
 managed_agent_path="${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent"
-agent_hash_before="$(hash_file "$managed_agent_path")"
+agent_hash_before=""
+managed_agent_ensured=0
 
 # Earliest telemetry signal: fire a plugin_launcher_started beacon straight to
 # PostHog BEFORE ensure/health-check/serve, so plugin activity is visible even if
@@ -220,7 +283,15 @@ if [ -n "${MONK_AGENT_PATH:-}" ]; then
 elif [ "${MONK_AGENT_SKIP_ENSURE:-0}" = "1" ]; then
   agent_path="$managed_agent_path"
 else
+  # Only the managed install can have been updated by ensure-monk-agent.sh, so
+  # only compute a before/after hash on that path. Hashing the managed
+  # binary's "before" state against a custom MONK_AGENT_PATH's "after" state
+  # compares two unrelated files -- they always differ, so agent_updated was
+  # always 1 and every session force-restarted a healthy custom companion
+  # (ENG-390).
+  agent_hash_before="$(hash_file "$managed_agent_path")"
   agent_path="$("$plugin_root/scripts/ensure-monk-agent.sh")"
+  managed_agent_ensured=1
 fi
 
 if [ ! -x "$agent_path" ]; then
@@ -228,10 +299,12 @@ if [ ! -x "$agent_path" ]; then
   exit 2
 fi
 
-agent_hash_after="$(hash_file "$agent_path")"
 agent_updated=0
-if [ -n "$agent_hash_after" ] && [ "$agent_hash_before" != "$agent_hash_after" ]; then
-  agent_updated=1
+if [ "$managed_agent_ensured" = "1" ]; then
+  agent_hash_after="$(hash_file "$agent_path")"
+  if [ -n "$agent_hash_after" ] && [ "$agent_hash_before" != "$agent_hash_after" ]; then
+    agent_updated=1
+  fi
 fi
 
 launchd_configured() {
@@ -247,6 +320,7 @@ launchd_configured() {
   # moment the agent should restart so telemetry reports the new version. It
   # cannot cause the per-session restart churn PATH did.
   [ -f "$launchd_plist" ] &&
+    grep -Fq "<string>$agent_path</string>" "$launchd_plist" &&
     grep -q "<string>$auth_client_id</string>" "$launchd_plist" &&
     grep -q "<string>$auth_url</string>" "$launchd_plist" &&
     grep -q "<string>$auth_audience</string>" "$launchd_plist" &&
@@ -255,8 +329,23 @@ launchd_configured() {
     grep -q "<string>${MONK_PLUGIN_VERSION:-}</string>" "$launchd_plist"
 }
 
+# The background-process (non-launchd) path has no plist to introspect, so the
+# fields that matter for reuse are persisted to state_file on every start and
+# diffed here. Covers both a stale custom MONK_AGENT_PATH (ENG-390) and
+# drifted auth/autospin config on an otherwise-healthy Linux/other-POSIX
+# companion (ENG-397 -- launchd_configured above already covers macOS).
+background_process_configured() {
+  [ -f "$state_file" ] || return 1
+  state="$(cat "$state_file" 2>/dev/null || true)"
+  printf '%s\n' "$state" | grep -Fxq "agent_path=$agent_path" &&
+    printf '%s\n' "$state" | grep -Fxq "auth_url=$auth_url" &&
+    printf '%s\n' "$state" | grep -Fxq "auth_client_id=$auth_client_id" &&
+    printf '%s\n' "$state" | grep -Fxq "auth_audience=$auth_audience" &&
+    printf '%s\n' "$state" | grep -Fxq "autospin_url=$autospin_url"
+}
+
 if [ "${MONK_AGENT_SKIP_ENSURE:-0}" != "1" ]; then
-  if [ "$os" != "Darwin" ] && [ "$agent_updated" = "0" ] && is_running; then
+  if [ "$os" != "Darwin" ] && [ "$agent_updated" = "0" ] && background_process_configured && is_running; then
     register_antigravity_mcp
     emit_signin_nudge
     exit 0
@@ -365,6 +454,13 @@ start_with_background_process() {
   fi
   pid="$!"
   printf '%s\n' "$pid" >"$pid_file"
+  {
+    printf 'agent_path=%s\n' "$agent_path"
+    printf 'auth_url=%s\n' "$auth_url"
+    printf 'auth_client_id=%s\n' "$auth_client_id"
+    printf 'auth_audience=%s\n' "$auth_audience"
+    printf 'autospin_url=%s\n' "$autospin_url"
+  } >"$state_file"
 }
 
 case "$os" in
@@ -372,24 +468,24 @@ case "$os" in
   *) start_with_background_process ;;
 esac
 
-tries=0
-while [ "$tries" -lt 180 ]; do
+ready_deadline=$(( $(date +%s) + ready_timeout ))
+while [ "$(date +%s)" -lt "$ready_deadline" ]; do
   if is_running; then
     register_antigravity_mcp
     emit_signin_nudge
     exit 0
   fi
-  # Break early if the background process has exited -- no point waiting 180s.
+  # Break early if the background process has exited -- no point waiting for
+  # the readiness deadline.
   if [ -f "$pid_file" ]; then
     _pid="$(cat "$pid_file" 2>/dev/null || true)"
     if [ -n "$_pid" ] && ! kill -0 "$_pid" 2>/dev/null; then
       break
     fi
   fi
-  tries=$((tries + 1))
   sleep 1
 done
 
-echo "monk-agent did not become ready at $health_url within 180s." >&2
+echo "monk-agent did not become ready at $health_url within ${ready_timeout}s." >&2
 echo "Log: $log_file" >&2
 exit 1

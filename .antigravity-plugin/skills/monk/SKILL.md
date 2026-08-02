@@ -269,10 +269,10 @@ open the required approval flow when needed.
   cluster switch; use `monk.cluster.switch` or `monk.cluster.exit` for logical
   context changes.
 - If the user asks to reset or clear Monk Agent local state, use
-  `monk.agent.clear_state` with `confirm:true`. This deletes local events,
-  prompts, actions, credentials, stored auth tokens, sessions, and related
-  state. Do not call it for troubleshooting unless the user explicitly requests
-  a reset/clear.
+  `monk.agent.clear_state`. It blocks on a dashboard approval before deleting
+  anything — local events, prompts, actions, credentials, stored auth tokens,
+  sessions, and related state. Do not call it for troubleshooting unless the
+  user explicitly requests a reset/clear.
 - Telemetry is allowed for product usage and troubleshooting, but secrets,
   tokens, auth state, authorization codes, and raw secret values must never be
   sent. `monk-agent` hashes or redacts sensitive fields before sending

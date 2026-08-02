@@ -127,7 +127,7 @@ try {
 
   $Expected = ((Get-Content -Raw $ChecksumTmp).Trim() -split "\s+")[0].ToLowerInvariant()
 
-  if ((Test-Path $Target) -and (Test-Path $ChecksumInstalled)) {
+  if ((Test-Path $Target) -and (Get-Item $Target).Length -gt 0 -and (Test-Path $ChecksumInstalled)) {
     $Installed = ((Get-Content -Raw $ChecksumInstalled).Trim() -split "\s+")[0].ToLowerInvariant()
     if ($Installed -eq $Expected) {
       Remove-Item -Force $ChecksumTmp

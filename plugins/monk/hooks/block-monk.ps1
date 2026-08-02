@@ -26,7 +26,18 @@ $hookInput = $reader.ReadToEnd()
 try { $command = ($hookInput | ConvertFrom-Json).tool_input.command } catch { exit 0 }
 if (-not $command) { exit 0 }
 
-if ($command -match '(^|[\r\n;&|`({])\s*(sudo\s+)?monk(\s|$)') {
+# Shell quoting/escaping ("monk", m\onk) and a short wrapper-command list
+# (sudo/command/env/exec/powershell -Command/cmd /c) don't change what
+# actually runs, so strip backslashes/quotes before matching and recognize
+# `monkd` + a leading forward-slash path (/usr/local/bin/monk). Blunt,
+# non-quote-aware strip — good enough for a degraded fallback that only runs
+# when the binary itself is missing (see block-monk.sh for the same
+# tradeoff). Known gap versus the primary `monk-agent hook block-monk` path:
+# a backslash-separated Windows path (C:\tools\monk.exe) loses its separator
+# to the blind strip here and isn't detected — the compiled binary's
+# quote-state-aware tokenizer handles that case correctly.
+$normalized = $command.Replace('\', '').Replace('"', '').Replace("'", '')
+if ($normalized -match '(^|[\r\n;&|`({])\s*(sudo|command|env|exec|powershell(\.exe)?\s+-(Command|c)|cmd(\.exe)?\s+/c)?\s*([^\s;&|`(){}]*[\\/])?monkd?(\.(exe|cmd|bat|ps1))?(\s|$)') {
   @{
     hookSpecificOutput = @{
       hookEventName            = "PreToolUse"

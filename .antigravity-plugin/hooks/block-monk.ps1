@@ -35,7 +35,15 @@ $hookInput = $reader.ReadToEnd()
 try { $command = ($hookInput | ConvertFrom-Json).toolCall.args.CommandLine } catch { exit 0 }
 if (-not $command) { exit 0 }
 
-if ($command -match '(^|[\r\n;&|`({])\s*(sudo\s+)?monk(\s|$)') {
+# Shell quoting/escaping ("monk", m\onk) and a short wrapper-command list
+# don't change what actually runs, so strip backslashes/quotes before
+# matching and recognize `monkd` + a leading forward-slash path. Blunt,
+# non-quote-aware strip — known gap versus the primary `monk-agent hook
+# block-monk` path: a backslash-separated Windows path loses its separator
+# to the strip here and isn't detected (see plugin/static/claude/hooks/
+# block-monk.ps1 for the same tradeoff, spelled out in more detail).
+$normalized = $command.Replace('\', '').Replace('"', '').Replace("'", '')
+if ($normalized -match '(^|[\r\n;&|`({])\s*(sudo|command|env|exec|powershell(\.exe)?\s+-(Command|c)|cmd(\.exe)?\s+/c)?\s*([^\s;&|`(){}]*[\\/])?monkd?(\.(exe|cmd|bat|ps1))?(\s|$)') {
   @{
     decision = "deny"
     reason   = "Blocked: do not shell out to the ``monk`` CLI - it desyncs the cluster state Monk manages. Use the monk-agent MCP tools instead."

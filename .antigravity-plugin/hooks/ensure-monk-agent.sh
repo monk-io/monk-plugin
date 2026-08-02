@@ -11,18 +11,30 @@ set -eu
 
 port="${MONK_AGENT_PORT:-7419}"
 host="${MONK_AGENT_HOST:-127.0.0.1}"
-health_url="http://$host:$port/.well-known/oauth-protected-resource"
+# IPv6 loopback hosts (e.g. ::1, an explicit MONK_AGENT_HOST override) must be
+# bracketed in a URL authority or the port separator is ambiguous.
+url_host="$host"
+case "$url_host" in
+  \[*\]) ;;
+  *:*) url_host="[$url_host]" ;;
+esac
+health_url="http://$url_host:$port/.well-known/oauth-protected-resource"
+health_resource="http://$url_host:$port/mcp"
 
 is_running() {
+  response=""
   if command -v curl >/dev/null 2>&1; then
-    curl -fsS --max-time 2 "$health_url" 2>/dev/null | grep -q '"resource"'
-    return $?
+    response="$(curl -fsS --noproxy '*' --max-time 2 "$health_url" 2>/dev/null)" || return 1
+  elif command -v wget >/dev/null 2>&1; then
+    response="$(env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY wget -q -T 2 -O - "$health_url" 2>/dev/null)" || return 1
+  else
+    return 1
   fi
-  if command -v wget >/dev/null 2>&1; then
-    wget -q -T 2 -O - "$health_url" 2>/dev/null | grep -q '"resource"'
-    return $?
-  fi
-  return 1
+  # Require the resource field to equal our own MCP endpoint, not merely be
+  # present — an unrelated service on the same port could otherwise be
+  # mistaken for monk-agent.
+  resource="$(printf '%s\n' "$response" | sed -n 's/.*"resource"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+  [ "$resource" = "$health_resource" ]
 }
 
 # Emit an Antigravity injectSteps payload carrying a single ephemeral message.
@@ -63,9 +75,15 @@ if [ ! -x "$agent_path" ]; then
 fi
 
 # Binary present but not running — start it directly
-log_dir="${MONK_AGENT_HOME:-"$HOME/.monk"}/agent/launcher/logs"
-mkdir -p "$log_dir"
+agent_data_dir="${MONK_AGENT_HOME:-"$HOME/.monk"}/agent/launcher"
+log_dir="$agent_data_dir/logs"
+run_dir="$agent_data_dir/run"
+mkdir -p "$log_dir" "$run_dir"
 log_file="$log_dir/monk-agent.log"
+# Write the pid file the official uninstaller looks for (see stop_agent() in
+# scripts/uninstall-monk-agent.sh) so a companion this hook starts in the
+# background is found and stopped on uninstall instead of surviving it.
+pid_file="$run_dir/monk-agent.pid"
 
 export MONK_AUTH_URL="${MONK_AUTH_URL:-https://auth.monk.io}"
 export MONK_AGENT_AUTH_CLIENT_ID="${MONK_AGENT_AUTH_CLIENT_ID:-UW84YWcJME3buMSLfqLX8IbBsYdNWi47}"
@@ -80,6 +98,7 @@ else
   "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &
 fi
 agent_pid=$!
+printf '%s\n' "$agent_pid" >"$pid_file"
 
 # Wait briefly for the agent to become reachable. If the process exits early or
 # the health endpoint never responds, report an attempted start with a pointer

@@ -39,10 +39,28 @@ esac
 
 url="$download_base/$platform_path/$artifact"
 checksum_url="$url.sha256"
-archive_tmp="$install_dir/.monk-agent.tmp.tar.gz"
-checksum_tmp="$install_dir/.monk-agent.tmp.sha256"
-extract_dir="$install_dir/.monk-agent.extract"
+archive_tmp="$install_dir/.monk-agent.tmp.$$.tar.gz"
+checksum_tmp="$install_dir/.monk-agent.tmp.$$.sha256"
+extract_dir="$install_dir/.monk-agent.extract.$$"
+lock_file="$install_dir/.monk-agent.lock"
 mkdir -p "$install_dir"
+
+cleanup() {
+  rm -rf "$extract_dir" "$archive_tmp" "$checksum_tmp"
+}
+trap cleanup EXIT
+
+# Serialize concurrent installs so they don't race on the shared install dir.
+# flock is standard on Linux; macOS lacks it by default, so skip locking there
+# rather than fail -- per-PID scratch paths below still keep each invocation's
+# download/extract isolated even without the lock.
+if command -v flock >/dev/null 2>&1; then
+  exec 3>"$lock_file"
+  if ! flock -n 3; then
+    echo "Another monk-agent install is in progress; waiting..." >&2
+    flock 3
+  fi
+fi
 
 if [ "$auto_update" = "0" ] || [ "$auto_update" = "false" ]; then
   if [ -x "$target" ]; then
@@ -66,7 +84,7 @@ fi
 
 expected="$(awk '{print $1}' "$checksum_tmp")"
 
-if [ -x "$target" ] && [ -f "$checksum_installed" ]; then
+if [ -x "$target" ] && [ -s "$target" ] && [ -f "$checksum_installed" ]; then
   installed="$(awk '{print $1}' "$checksum_installed")"
   if [ "$installed" = "$expected" ]; then
     rm -f "$checksum_tmp"
@@ -102,5 +120,4 @@ tar -xzf "$archive_tmp" -C "$extract_dir"
 chmod 0755 "$extract_dir/monk-agent"
 mv "$extract_dir/monk-agent" "$target"
 printf '%s  %s\n' "$expected" "$artifact" >"$checksum_installed"
-rm -rf "$extract_dir" "$archive_tmp" "$checksum_tmp"
 printf '%s\n' "$target"
