@@ -146,6 +146,14 @@ jobs:
           wait "$owned_pid" 2>/dev/null || true
           owned_pid=""
 
+      - name: Check launcher fast-path reuse/restart
+        shell: bash
+        run: ./tests/start-monk-agent-fastpath.sh
+
+      - name: Check launcher readiness deadline
+        shell: bash
+        run: ./tests/start-monk-agent-readiness-timeout.sh
+
   windows:
     name: windows-latest
     runs-on: windows-latest
@@ -157,6 +165,10 @@ jobs:
       - name: Test Windows block-monk fallbacks
         shell: pwsh
         run: .\tests\block-monk-windows.ps1
+
+      - name: Check launcher readiness deadline
+        shell: pwsh
+        run: .\tests\start-monk-agent-readiness-timeout.ps1
 
       - name: Install monk-agent
         shell: pwsh

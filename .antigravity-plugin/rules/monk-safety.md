@@ -40,6 +40,6 @@ After editing, run `monk.analyzer.diagnose` again before deploying.
 
 ## State reset
 
-If the user asks to reset or clear Monk Agent local state, use `monk.agent.clear_state` with
-`confirm:true`. Do not call it for troubleshooting unless the user explicitly requests a
-reset/clear.
+If the user asks to reset or clear Monk Agent local state, use `monk.agent.clear_state`. It blocks
+on a dashboard approval before deleting anything. Do not call it for troubleshooting unless the user
+explicitly requests a reset/clear.

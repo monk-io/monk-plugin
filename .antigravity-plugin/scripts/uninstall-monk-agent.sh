@@ -83,6 +83,32 @@ if [ "$assume_yes" != "1" ]; then
   esac
 fi
 
+resolve_executable_path() {
+  path="$1"
+  if command -v readlink >/dev/null 2>&1; then
+    readlink -f "$path" 2>/dev/null && return 0
+  fi
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$path" 2>/dev/null && return 0
+  fi
+  return 1
+}
+
+pid_matches_executable() {
+  pid="$1"
+  expected_path="$2"
+  case "$pid" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$(uname -s 2>/dev/null || printf unknown)" = "Linux" ] || return 1
+  actual_path="$(readlink "/proc/$pid/exe" 2>/dev/null)" || return 1
+  case "$actual_path" in
+    *" (deleted)") actual_path="${actual_path% *}" ;;
+  esac
+  expected_path="$(resolve_executable_path "$expected_path")" || return 1
+  [ "$actual_path" = "$expected_path" ]
+}
+
 stop_agent() {
   os="$(uname -s 2>/dev/null || printf unknown)"
   if [ "$os" = "Darwin" ] && command -v launchctl >/dev/null 2>&1; then
@@ -96,19 +122,8 @@ stop_agent() {
     case "$pid" in
       ''|*[!0-9]*) ;;
       *)
-        if kill -0 "$pid" >/dev/null 2>&1; then
-          # Verify the process is actually monk-agent before killing to
-          # avoid terminating an unrelated process that reused the stale PID.
-          proc_name=""
-          if [ -f "/proc/$pid/comm" ]; then
-            proc_name="$(tr -d '\n' < "/proc/$pid/comm" 2>/dev/null || true)"
-          fi
-          if [ -z "$proc_name" ] && command -v ps >/dev/null 2>&1; then
-            proc_name="$(ps -p "$pid" -o comm= 2>/dev/null || true)"
-          fi
-          if [ -z "$proc_name" ] || [ "$proc_name" = "monk-agent" ]; then
-            kill "$pid" >/dev/null 2>&1 || true
-          fi
+        if kill -0 "$pid" >/dev/null 2>&1 && pid_matches_executable "$pid" "$target"; then
+          kill "$pid" >/dev/null 2>&1 || true
         fi
         ;;
     esac
@@ -160,8 +175,46 @@ remove_runtime() {
   esac
 }
 
+# Remove the mcpServers.monk entry this launcher adds to Antigravity's global
+# config (see register_antigravity_mcp() in start-monk-agent.sh), preserving
+# unrelated servers, so a dead MCP registration doesn't outlive the uninstall.
+remove_antigravity_mcp() {
+  mcp_cfg="$home_dir/.gemini/config/mcp_config.json"
+  [ -f "$mcp_cfg" ] || return 0
+  if command -v jq >/dev/null 2>&1; then
+    jq empty "$mcp_cfg" >/dev/null 2>&1 || return 0
+    tmp="$(mktemp)"
+    if jq 'if .mcpServers.monk != null then
+             .mcpServers |= del(.monk) |
+             (if (.mcpServers | length) == 0 then del(.mcpServers) else . end)
+           else . end' "$mcp_cfg" >"$tmp" 2>/dev/null; then
+      mv "$tmp" "$mcp_cfg"
+    else
+      rm -f "$tmp"
+    fi
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c "
+import json
+try:
+    with open('$mcp_cfg') as f:
+        cfg = json.load(f)
+except (OSError, ValueError):
+    raise SystemExit(0)
+servers = cfg.get('mcpServers')
+if isinstance(servers, dict) and 'monk' in servers:
+    del servers['monk']
+    if not servers:
+        cfg.pop('mcpServers', None)
+    with open('$mcp_cfg', 'w') as f:
+        json.dump(cfg, f, indent=2)
+        f.write('\n')
+" 2>/dev/null || true
+  fi
+}
+
 stop_agent
 remove_agent_files
+remove_antigravity_mcp
 if [ "$remove_runtime" = "1" ]; then
   remove_runtime
 fi

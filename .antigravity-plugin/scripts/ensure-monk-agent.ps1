@@ -38,6 +38,22 @@ function Get-FileSha256 {
   return ([System.BitConverter]::ToString($Hash) -replace "-", "").ToLowerInvariant()
 }
 
+function Test-SameFilePath {
+  param([string]$Actual, [string]$Expected)
+  if (-not $Actual -or -not $Expected) {
+    return $false
+  }
+  try {
+    return [string]::Equals(
+      [IO.Path]::GetFullPath($Actual),
+      [IO.Path]::GetFullPath($Expected),
+      [StringComparison]::OrdinalIgnoreCase
+    )
+  } catch {
+    return $false
+  }
+}
+
 function Stop-ManagedAgent {
   if (-not (Test-Path $PidFile)) {
     return
@@ -70,7 +86,7 @@ function Stop-ManagedAgent {
     $ProcessPath = ""
   }
 
-  if (-not $ProcessPath -or ([IO.Path]::GetFileName($ProcessPath) -ieq "monk-agent.exe")) {
+  if (Test-SameFilePath $ProcessPath $Target) {
     Stop-Process -Id $OldProcess.Id -Force -ErrorAction SilentlyContinue
     try {
       Wait-Process -Id $OldProcess.Id -Timeout 10 -ErrorAction SilentlyContinue
@@ -115,7 +131,7 @@ Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumTmp
 
 $Expected = ((Get-Content -Raw $ChecksumTmp).Trim() -split "\s+")[0].ToLowerInvariant()
 
-if ((Test-Path $Target) -and (Test-Path $ChecksumInstalled)) {
+if ((Test-Path $Target) -and (Get-Item $Target).Length -gt 0 -and (Test-Path $ChecksumInstalled)) {
   $Installed = ((Get-Content -Raw $ChecksumInstalled).Trim() -split "\s+")[0].ToLowerInvariant()
   if ($Installed -eq $Expected) {
     Remove-Item -Force $ChecksumTmp

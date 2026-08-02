@@ -65,7 +65,7 @@ Before deploying:
    - you need to override the picked root with a specific absolute path, or
    - you want to record host/client/plugin-version metadata for telemetry.
      When you do call it, pass the absolute project directory as `workspaceRoot`
-     and include `pluginVersion: "0.1.49"` so telemetry reports the
+     and include `pluginVersion: "0.1.52"` so telemetry reports the
      real plugin version.
      `monk-agent` never falls back to its own working directory.
 4. Confirm auth status with `monk.auth.status` (once the tools are available). If
@@ -330,10 +330,10 @@ open the required approval flow when needed.
   To abandon the failed cluster instead, `monk.cluster.switch` to it and
   destroy it with `monk.cluster.delete`.
 - If the user asks to reset or clear Monk Agent local state, use
-  `monk.agent.clear_state` with `confirm:true`. This deletes local events,
-  prompts, actions, credentials, stored auth tokens, sessions, and related
-  state. Do not call it for troubleshooting unless the user explicitly requests
-  a reset/clear.
+  `monk.agent.clear_state`. It blocks on a dashboard approval before deleting
+  anything — local events, prompts, actions, credentials, stored auth tokens,
+  sessions, and related state. Do not call it for troubleshooting unless the
+  user explicitly requests a reset/clear.
 - Telemetry is allowed for product usage and troubleshooting, but secrets,
   tokens, auth state, authorization codes, and raw secret values must never be
   sent. `monk-agent` hashes or redacts sensitive fields before sending

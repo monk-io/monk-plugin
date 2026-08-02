@@ -30,9 +30,29 @@ if [ -x "$agent" ]; then
   fi
 fi
 
-# Fallback: binary unavailable. Grep the raw hook payload for a `monk` command
-# in command position. False positives only ever BLOCK, never allow.
-if printf '%s' "$input" | grep -Eq '(^|["[:space:];&|`(])(sudo[[:space:]]+)?monk([[:space:]"]|$)'; then
+# Fallback: binary unavailable. No jq here, so pull just the `CommandLine`
+# string out of the raw JSON (best-effort key match, not a full parser) rather
+# than grepping the whole payload: matching against the raw text means a `"`
+# right before "monk" is the JSON *string* delimiter, not shell quoting —
+# stripping quotes from the whole payload destroys that boundary. Once
+# isolated, JSON's own `\"`/`\\` escaping and shell-level quoting/escaping
+# ("monk", m\onk) both collapse under the same blunt backslash/quote strip
+# (they compose additively here). Then match `monk`/`monkd` in command
+# position, past a short wrapper-command list and an optional leading path.
+# This is a blunt, non-quote-aware strip — see block-monk.ps1 for the
+# tradeoff vs the quote-state-aware primary `monk-agent hook block-monk` path.
+# False positives only ever BLOCK, never allow.
+raw_command="$(printf '%s' "$input" |
+  grep -Eo '"CommandLine"[[:space:]]*:[[:space:]]*"([^"\\]|\\.)*"' |
+  sed -E 's/^"CommandLine"[[:space:]]*:[[:space:]]*"//; s/"$//')"
+# A real newline in the original command is JSON-encoded as the two-char
+# escape `\n` (JSON strings can't contain a raw newline byte), so a
+# multi-line command survives extraction as one text line with a literal
+# backslash-n in it — invisible to the separator split below unless restored
+# to a real newline first (same for \r).
+raw_command="$(printf '%s' "$raw_command" | awk '{gsub(/\\n/, "\n"); gsub(/\\r/, "\r"); print}')"
+normalized="$(printf '%s' "$raw_command" | tr -d '\\' | tr -d '"' | tr -d "'")"
+if printf '%s' "$normalized" | grep -Eq '(^|[;&|`(){}])[[:space:]]*(sudo|command|env|exec|nohup|time|nice)?[[:space:]]*([^[:space:];&|`(){}]*[/\\])?monkd?(\.(exe|cmd|bat|ps1))?([[:space:]]|$)'; then
   cat <<'JSON'
 {
   "decision": "deny",
