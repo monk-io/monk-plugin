@@ -327,6 +327,10 @@ if ($ManagedAgentEnsured) {
 # fields that matter for reuse are persisted to $StateFile on every start and
 # diffed here. Covers both a stale custom MONK_AGENT_PATH and drifted
 # auth/autospin config on an otherwise-healthy companion (ENG-390, ENG-397).
+# local/plugin_version are gated too (parity with the macOS launchd plist
+# check): flipping MONK_AGENT_LOCAL or upgrading only the plugin must restart
+# a "healthy" agent so it picks up the new mode and stops reporting a stale
+# plugin version — previously both were silently ignored on Windows and Linux.
 function Test-BackgroundStateConfigured {
   if (-not (Test-Path $StateFile)) {
     return $false
@@ -340,7 +344,9 @@ function Test-BackgroundStateConfigured {
     "auth_url=$AuthUrl",
     "auth_client_id=$AuthClientId",
     "auth_audience=$AuthAudience",
-    "autospin_url=$AutospinUrl"
+    "autospin_url=$AutospinUrl",
+    "local=$($env:MONK_AGENT_LOCAL)",
+    "plugin_version=$($env:MONK_PLUGIN_VERSION)"
   )
   $Lines = $State -split "`r?`n"
   foreach ($Line in $Expected) {
@@ -382,7 +388,9 @@ $Process.Id | Set-Content -NoNewline $PidFile
   "auth_url=$AuthUrl",
   "auth_client_id=$AuthClientId",
   "auth_audience=$AuthAudience",
-  "autospin_url=$AutospinUrl"
+  "autospin_url=$AutospinUrl",
+  "local=$($env:MONK_AGENT_LOCAL)",
+  "plugin_version=$($env:MONK_PLUGIN_VERSION)"
 ) -join "`n" | Set-Content -NoNewline $StateFile
 
 $ReadyTimer = [System.Diagnostics.Stopwatch]::StartNew()

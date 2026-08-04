@@ -31,6 +31,8 @@ write_state() {
     printf 'auth_client_id=UW84YWcJME3buMSLfqLX8IbBsYdNWi47\n'
     printf 'auth_audience=oaknode.com\n'
     printf 'autospin_url=wss://api.app.monk.io/autospin/\n'
+    printf 'local=\n'
+    printf 'plugin_version=0.1.52\n'
   } >"$state_file"
 }
 
@@ -62,6 +64,46 @@ if [ ! -e "$drift_run_dir/monk-agent.pid" ]; then
 fi
 if ! grep -Fxq "auth_url=https://auth-two.invalid" "$drift_run_dir/monk-agent.state"; then
   echo "updated auth_url was not recorded in the state file" >&2
+  exit 1
+fi
+
+# Case 3: MONK_AGENT_LOCAL drift -> restarted (issue #229: user-set local-mode
+# switch must not be silently ignored by the Linux background fast path,
+# mirroring the launchd plist gate on macOS).
+write_state_with_local() {
+  state_file="$1"
+  local_value="$2"
+  {
+    printf 'agent_path=/usr/bin/true\n'
+    printf 'auth_url=https://auth.monk.io\n'
+    printf 'auth_client_id=UW84YWcJME3buMSLfqLX8IbBsYdNWi47\n'
+    printf 'auth_audience=oaknode.com\n'
+    printf 'autospin_url=wss://api.app.monk.io/autospin/\n'
+    printf 'local=%s\n' "$local_value"
+    printf 'plugin_version=0.1.52\n'
+  } >"$state_file"
+}
+
+local_dir="$work_dir/local/monk"
+local_run_dir="$local_dir/agent/launcher/run"
+mkdir -p "$local_run_dir"
+write_state_with_local "$local_run_dir/monk-agent.state" ""
+
+HOME="$work_dir/home" \
+PATH="$fixture_bin:/usr/bin:/bin" \
+MONK_AGENT_PATH=/usr/bin/true \
+MONK_AGENT_HOME="$local_dir" \
+MONK_AUTH_URL="https://auth.monk.io" \
+MONK_AGENT_LOCAL=1 \
+MONK_AGENT_SKIP_SIGNIN_NUDGE=1 \
+  "$repo_root/scripts/start-monk-agent.sh"
+
+if [ ! -e "$local_run_dir/monk-agent.pid" ]; then
+  echo "companion was not restarted after MONK_AGENT_LOCAL flipped on" >&2
+  exit 1
+fi
+if ! grep -Fxq "local=1" "$local_run_dir/monk-agent.state"; then
+  echo "updated MONK_AGENT_LOCAL was not recorded in the state file" >&2
   exit 1
 fi
 

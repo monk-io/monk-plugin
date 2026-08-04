@@ -338,6 +338,12 @@ launchd_configured() {
 # diffed here. Covers both a stale custom MONK_AGENT_PATH (ENG-390) and
 # drifted auth/autospin config on an otherwise-healthy Linux/other-POSIX
 # companion (ENG-397 -- launchd_configured above already covers macOS).
+# local/plugin_version ARE gated here (unlike PATH and launch client): they
+# change only on an explicit user setting or a plugin install/upgrade, and
+# both are exactly the moments the agent should restart -- mirroring the
+# launchd plist checks on macOS. Before this, flipping MONK_AGENT_LOCAL or
+# upgrading only the plugin left a "healthy" background agent silently
+# running with the old mode and old version indefinitely.
 background_process_configured() {
   [ -f "$state_file" ] || return 1
   state="$(cat "$state_file" 2>/dev/null || true)"
@@ -345,7 +351,9 @@ background_process_configured() {
     printf '%s\n' "$state" | grep -Fxq "auth_url=$auth_url" &&
     printf '%s\n' "$state" | grep -Fxq "auth_client_id=$auth_client_id" &&
     printf '%s\n' "$state" | grep -Fxq "auth_audience=$auth_audience" &&
-    printf '%s\n' "$state" | grep -Fxq "autospin_url=$autospin_url"
+    printf '%s\n' "$state" | grep -Fxq "autospin_url=$autospin_url" &&
+    printf '%s\n' "$state" | grep -Fxq "local=${MONK_AGENT_LOCAL:-}" &&
+    printf '%s\n' "$state" | grep -Fxq "plugin_version=${MONK_PLUGIN_VERSION:-}"
 }
 
 if [ "${MONK_AGENT_SKIP_ENSURE:-0}" != "1" ]; then
@@ -464,6 +472,8 @@ start_with_background_process() {
     printf 'auth_client_id=%s\n' "$auth_client_id"
     printf 'auth_audience=%s\n' "$auth_audience"
     printf 'autospin_url=%s\n' "$autospin_url"
+    printf 'local=%s\n' "${MONK_AGENT_LOCAL:-}"
+    printf 'plugin_version=%s\n' "${MONK_PLUGIN_VERSION:-}"
   } >"$state_file"
 }
 
