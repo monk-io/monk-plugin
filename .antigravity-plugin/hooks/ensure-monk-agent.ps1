@@ -12,9 +12,41 @@ $ErrorActionPreference = "SilentlyContinue"
 # Drain stdin so Antigravity's writer never blocks, even though we ignore it.
 [Console]::In.ReadToEnd() | Out-Null
 
-# If bash is available the .sh sibling handles this; bow out silently so the two
-# hooks never both emit JSON (Antigravity runs every hook in the list).
-if (Get-Command bash -ErrorAction SilentlyContinue) { exit 0 }
+# If a usable bash is available the .sh sibling handles this; bow out silently
+# so the two hooks never both emit JSON (Antigravity runs every hook in the
+# list). Command presence alone is insufficient: Windows can expose the legacy
+# WSL bash.exe launcher even when no distro contains /bin/bash, in which case
+# the POSIX sibling cannot run and this native hook still needs to handle the
+# invocation.
+$BashUsable = $false
+$BashCommand = Get-Command bash -ErrorAction SilentlyContinue
+if ($BashCommand -and $BashCommand.CommandType -eq "Application") {
+  $BashProbe = New-Object System.Diagnostics.Process
+  try {
+    $BashProbe.StartInfo.FileName = $BashCommand.Source
+    $BashProbe.StartInfo.Arguments = '-lc "exit 0"'
+    $BashProbe.StartInfo.UseShellExecute = $false
+    $BashProbe.StartInfo.RedirectStandardOutput = $true
+    $BashProbe.StartInfo.RedirectStandardError = $true
+    $BashProbe.StartInfo.CreateNoWindow = $true
+    if ($BashProbe.Start()) {
+      # Drain redirected streams asynchronously so a broken launcher cannot
+      # block while reporting its own startup failure.
+      $null = $BashProbe.StandardOutput.ReadToEndAsync()
+      $null = $BashProbe.StandardError.ReadToEndAsync()
+      if ($BashProbe.WaitForExit(2000)) {
+        $BashUsable = $BashProbe.ExitCode -eq 0
+      } else {
+        $BashProbe.Kill()
+      }
+    }
+  } catch {
+    $BashUsable = $false
+  } finally {
+    $BashProbe.Dispose()
+  }
+}
+if ($BashUsable) { exit 0 }
 
 $Port = if ($env:MONK_AGENT_PORT) { $env:MONK_AGENT_PORT } else { "7419" }
 $AgentHost = if ($env:MONK_AGENT_HOST) { $env:MONK_AGENT_HOST } else { "127.0.0.1" }
