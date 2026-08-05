@@ -132,7 +132,8 @@ if ($Process) {
 # the health endpoint never responds, report an attempted start with a pointer
 # to the logs instead of a false "has been started".
 if ($Process -and -not $Process.HasExited) {
-  for ($i = 0; $i -lt 10; $i++) {
+  $ReadyDeadline = [DateTime]::UtcNow.AddSeconds(10)
+  while ([DateTime]::UtcNow -lt $ReadyDeadline) {
     Start-Sleep -Seconds 1
     if ($Process.HasExited) { break }
     if (Test-AgentRunning) {

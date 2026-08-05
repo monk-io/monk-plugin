@@ -103,8 +103,8 @@ printf '%s\n' "$agent_pid" >"$pid_file"
 # Wait briefly for the agent to become reachable. If the process exits early or
 # the health endpoint never responds, report an attempted start with a pointer
 # to the logs instead of a false "has been started".
-i=0
-while [ "$i" -lt 10 ]; do
+ready_deadline=$(( $(date +%s) + 10 ))
+while [ "$(date +%s)" -lt "$ready_deadline" ]; do
   sleep 1
   if ! kill -0 "$agent_pid" 2>/dev/null; then
     break
@@ -113,7 +113,6 @@ while [ "$i" -lt 10 ]; do
     emit_inject_steps "monk-agent was not running and has been started. It may take a few seconds to initialize — use monk.install.status or monk.runtime.status to check readiness before issuing Monk operations."
     exit 0
   fi
-  i=$((i + 1))
 done
 
 emit_inject_steps "monk-agent was started but did not become ready within 10 seconds. Check monk.install.status or monk.runtime.status for details, or the launcher logs under $log_dir."
