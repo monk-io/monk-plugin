@@ -106,14 +106,15 @@ register_antigravity_mcp() {
     # produce a warning, not abort the launcher after the health check passed.
     valid=1
     if command -v jq >/dev/null 2>&1; then
-      jq empty "$mcp_cfg" >/dev/null 2>&1 || valid=0
+      jq -e 'type == "object"' "$mcp_cfg" >/dev/null 2>&1 || valid=0
     elif command -v python3 >/dev/null 2>&1; then
       python3 -c 'import json, sys
 with open(sys.argv[1], encoding="utf-8") as handle:
-    json.load(handle)' "$mcp_cfg" >/dev/null 2>&1 || valid=0
+    cfg = json.load(handle)
+raise SystemExit(0 if isinstance(cfg, dict) else 1)' "$mcp_cfg" >/dev/null 2>&1 || valid=0
     fi
     if [ "$valid" = "0" ]; then
-      echo "Warning: $mcp_cfg is not valid JSON; skipping automatic Antigravity MCP registration." >&2
+      echo "Warning: $mcp_cfg is not a valid JSON object; skipping automatic Antigravity MCP registration." >&2
       printf '  Add manually if desired: {"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >&2
       return 0
     fi
