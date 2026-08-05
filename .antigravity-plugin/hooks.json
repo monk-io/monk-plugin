@@ -5,12 +5,12 @@
       {
         "type": "command",
         "command": "scripts\\run-powershell.cmd hooks\\ensure-monk-agent.ps1",
-        "timeout": 10
+        "timeout": 20
       },
       {
         "type": "command",
         "command": "./hooks/ensure-monk-agent.sh",
-        "timeout": 10
+        "timeout": 20
       }
     ]
   },
