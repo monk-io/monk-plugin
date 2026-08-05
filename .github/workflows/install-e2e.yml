@@ -58,6 +58,10 @@ jobs:
         shell: bash
         run: ./tests/start-monk-agent-fastpath.sh
 
+      - name: Check launcher background retry
+        shell: bash
+        run: ./tests/start-monk-agent-background-retry.sh
+
       - name: Check launcher readiness deadline
         shell: bash
         run: ./tests/start-monk-agent-readiness-timeout.sh

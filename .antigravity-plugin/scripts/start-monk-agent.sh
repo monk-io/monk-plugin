@@ -23,6 +23,14 @@ elif [ "$ready_timeout" -gt 150 ]; then
   ready_timeout=150
 fi
 
+background_restart_limit="${MONK_AGENT_BACKGROUND_RESTARTS:-3}"
+case "$background_restart_limit" in
+  ''|*[!0-9]*) background_restart_limit=3 ;;
+esac
+if [ "$background_restart_limit" -gt 10 ]; then
+  background_restart_limit=10
+fi
+
 # Rendered at plugin build time; carries MONK_PLUGIN_VERSION so the agent can
 # report the real plugin version in telemetry. Guarded: an older rendered
 # plugin without the file must still launch (the agent falls back to a labeled
@@ -498,6 +506,7 @@ case "$os" in
   *) start_with_background_process ;;
 esac
 
+background_restarts=0
 ready_deadline=$(( $(date +%s) + ready_timeout ))
 while [ "$(date +%s)" -lt "$ready_deadline" ]; do
   if is_running; then
@@ -510,6 +519,13 @@ while [ "$(date +%s)" -lt "$ready_deadline" ]; do
   if [ -f "$pid_file" ]; then
     _pid="$(cat "$pid_file" 2>/dev/null || true)"
     if [ -n "$_pid" ] && ! kill -0 "$_pid" 2>/dev/null; then
+      if [ "$os" != "Darwin" ] && [ "$background_restarts" -lt "$background_restart_limit" ]; then
+        background_restarts=$((background_restarts + 1))
+        echo "monk-agent exited before readiness; retrying background start ($background_restarts/$background_restart_limit)." >&2
+        start_with_background_process
+        sleep 1
+        continue
+      fi
       break
     fi
   fi
