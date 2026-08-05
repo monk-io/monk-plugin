@@ -12,9 +12,23 @@ $ErrorActionPreference = "SilentlyContinue"
 # Drain stdin so Antigravity's writer never blocks, even though we ignore it.
 [Console]::In.ReadToEnd() | Out-Null
 
-# If bash is available the .sh sibling handles this; bow out silently so the two
-# hooks never both emit JSON (Antigravity runs every hook in the list).
-if (Get-Command bash -ErrorAction SilentlyContinue) { exit 0 }
+# If a usable bash is available the .sh sibling handles this; bow out silently
+# so the two hooks never both emit JSON (Antigravity runs every hook in the
+# list). Command presence alone is insufficient: Windows can expose the legacy
+# WSL bash.exe launcher even when no distro contains /bin/bash, in which case
+# the POSIX sibling cannot run and this native hook still needs to handle the
+# invocation.
+$BashUsable = $false
+$BashCommand = Get-Command bash -ErrorAction SilentlyContinue
+if ($BashCommand) {
+  try {
+    & $BashCommand.Source -lc "exit 0" *> $null
+    $BashUsable = $LASTEXITCODE -eq 0
+  } catch {
+    $BashUsable = $false
+  }
+}
+if ($BashUsable) { exit 0 }
 
 $Port = if ($env:MONK_AGENT_PORT) { $env:MONK_AGENT_PORT } else { "7419" }
 $AgentHost = if ($env:MONK_AGENT_HOST) { $env:MONK_AGENT_HOST } else { "127.0.0.1" }
