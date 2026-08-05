@@ -162,7 +162,7 @@ try {
     $InstallerMutexOwned = $true
   }
 
-  Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumTmp
+  Invoke-WebRequest -UseBasicParsing -Uri $ChecksumUrl -OutFile $ChecksumTmp
 
   $Expected = ((Get-Content -Raw $ChecksumTmp).Trim() -split "\s+")[0].ToLowerInvariant()
 
@@ -176,7 +176,7 @@ try {
   }
 
   Write-Host "Installing monk-agent from $Url"
-  Invoke-WebRequest -Uri $Url -OutFile $ArchiveTmp
+  Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $ArchiveTmp
 
   $Actual = Get-FileSha256 $ArchiveTmp
   if ($Actual -ne $Expected) {
