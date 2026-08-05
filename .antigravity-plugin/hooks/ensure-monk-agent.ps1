@@ -20,12 +20,30 @@ $ErrorActionPreference = "SilentlyContinue"
 # invocation.
 $BashUsable = $false
 $BashCommand = Get-Command bash -ErrorAction SilentlyContinue
-if ($BashCommand) {
+if ($BashCommand -and $BashCommand.CommandType -eq "Application") {
+  $BashProbe = New-Object System.Diagnostics.Process
   try {
-    & $BashCommand.Source -lc "exit 0" *> $null
-    $BashUsable = $LASTEXITCODE -eq 0
+    $BashProbe.StartInfo.FileName = $BashCommand.Source
+    $BashProbe.StartInfo.Arguments = '-lc "exit 0"'
+    $BashProbe.StartInfo.UseShellExecute = $false
+    $BashProbe.StartInfo.RedirectStandardOutput = $true
+    $BashProbe.StartInfo.RedirectStandardError = $true
+    $BashProbe.StartInfo.CreateNoWindow = $true
+    if ($BashProbe.Start()) {
+      # Drain redirected streams asynchronously so a broken launcher cannot
+      # block while reporting its own startup failure.
+      $null = $BashProbe.StandardOutput.ReadToEndAsync()
+      $null = $BashProbe.StandardError.ReadToEndAsync()
+      if ($BashProbe.WaitForExit(2000)) {
+        $BashUsable = $BashProbe.ExitCode -eq 0
+      } else {
+        $BashProbe.Kill()
+      }
+    }
   } catch {
     $BashUsable = $false
+  } finally {
+    $BashProbe.Dispose()
   }
 }
 if ($BashUsable) { exit 0 }
