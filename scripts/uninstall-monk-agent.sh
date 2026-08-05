@@ -194,9 +194,10 @@ remove_antigravity_mcp() {
     fi
   elif command -v python3 >/dev/null 2>&1; then
     python3 -c "
-import json
+import json, sys
+mcp_cfg = sys.argv[1]
 try:
-    with open('$mcp_cfg') as f:
+    with open(mcp_cfg) as f:
         cfg = json.load(f)
 except (OSError, ValueError):
     raise SystemExit(0)
@@ -205,10 +206,10 @@ if isinstance(servers, dict) and 'monk' in servers:
     del servers['monk']
     if not servers:
         cfg.pop('mcpServers', None)
-    with open('$mcp_cfg', 'w') as f:
+    with open(mcp_cfg, 'w') as f:
         json.dump(cfg, f, indent=2)
         f.write('\n')
-" 2>/dev/null || true
+" "$mcp_cfg" 2>/dev/null || true
   fi
 }
 
