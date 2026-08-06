@@ -78,6 +78,10 @@ jobs:
         shell: pwsh
         run: .\tests\block-monk-windows.ps1
 
+      - name: Test Windows PowerShell 5.1 installer downloads
+        shell: pwsh
+        run: .\tests\ensure-monk-agent-basic-parsing.ps1
+
       - name: Check launcher readiness deadline
         shell: pwsh
         run: .\tests\start-monk-agent-readiness-timeout.ps1
