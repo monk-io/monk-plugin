@@ -463,7 +463,15 @@ EOF
 start_with_background_process() {
   if [ -f "$pid_file" ]; then
     old_pid="$(cat "$pid_file" 2>/dev/null || true)"
-    if pid_matches_executable "$old_pid" "$agent_path" && kill -0 "$old_pid" >/dev/null 2>&1; then
+    # The PID belongs to the executable recorded by the previous launch, not
+    # necessarily the newly selected MONK_AGENT_PATH. Authenticate ownership
+    # against that prior path so an A -> B switch can stop A before starting B.
+    old_agent_path="$agent_path"
+    if [ -f "$state_file" ]; then
+      recorded_agent_path="$(sed -n 's/^agent_path=//p' "$state_file" 2>/dev/null | head -n 1)"
+      [ -n "$recorded_agent_path" ] && old_agent_path="$recorded_agent_path"
+    fi
+    if pid_matches_executable "$old_pid" "$old_agent_path" && kill -0 "$old_pid" >/dev/null 2>&1; then
       if kill "$old_pid" >/dev/null 2>&1; then
         stop_tries=0
         while kill -0 "$old_pid" >/dev/null 2>&1 && [ "$stop_tries" -lt 10 ]; do

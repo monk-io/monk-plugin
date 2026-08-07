@@ -58,6 +58,10 @@ jobs:
         shell: bash
         run: ./tests/start-monk-agent-fastpath.sh
 
+      - name: Check custom agent path handoff
+        shell: bash
+        run: ./tests/start-monk-agent-path-handoff.sh
+
       - name: Check launcher readiness deadline
         shell: bash
         run: ./tests/start-monk-agent-readiness-timeout.sh
@@ -81,6 +85,10 @@ jobs:
       - name: Check launcher readiness deadline
         shell: pwsh
         run: .\tests\start-monk-agent-readiness-timeout.ps1
+
+      - name: Check custom agent path handoff
+        shell: pwsh
+        run: .\tests\start-monk-agent-path-handoff.ps1
 
       - name: Install monk-agent
         shell: pwsh
