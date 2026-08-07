@@ -82,6 +82,10 @@ jobs:
         shell: pwsh
         run: .\tests\start-monk-agent-readiness-timeout.ps1
 
+      - name: Check launcher client-attribution drift
+        shell: pwsh
+        run: .\tests\start-monk-agent-launch-client-drift.ps1
+
       - name: Install monk-agent
         shell: pwsh
         env:
