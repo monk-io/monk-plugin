@@ -8,8 +8,6 @@ $Root = Join-Path ([IO.Path]::GetTempPath()) ("monk-readiness-" + [guid]::NewGui
 $SrcPath = Join-Path $Root "fake-agent.cs"
 $AgentPath = Join-Path $Root "fake-agent.exe"
 $MonkHome = Join-Path $Root "home"
-$StdoutPath = Join-Path $Root "launcher.out.log"
-$StderrPath = Join-Path $Root "launcher.err.log"
 $PidFile = Join-Path $MonkHome "agent\launcher\run\monk-agent.pid"
 
 # Strips ANSI/VT100 escape sequences (color, cursor movement) from captured
@@ -82,10 +80,28 @@ class Program { static void Main(string[] args) { Thread.Sleep(TimeSpan.FromSeco
   # unwrapped NormalView via -Command so the captured text is a single
   # contiguous line instead of guessing at every possible wrap point.
   $ChildCommand = "`$ErrorView = 'NormalView'; & '$LauncherPath'"
-  $Launcher = Start-Process -FilePath (Get-Process -Id $PID).Path `
-    -ArgumentList @("-NoLogo", "-NoProfile", "-Command", $ChildCommand) `
-    -PassThru -RedirectStandardOutput $StdoutPath -RedirectStandardError $StderrPath
+  # Start-Process loses ExitCode on Windows PowerShell 5.1 when stdout/stderr
+  # are redirected. Use ProcessStartInfo directly so the test can assert the
+  # launcher's exit code on both Windows PowerShell and PowerShell 7.
+  $ProcessInfo = New-Object Diagnostics.ProcessStartInfo
+  $ProcessInfo.FileName = (Get-Process -Id $PID).Path
+  $ProcessInfo.Arguments = "-NoLogo -NoProfile -Command `"$ChildCommand`""
+  $ProcessInfo.UseShellExecute = $false
+  $ProcessInfo.CreateNoWindow = $true
+  $ProcessInfo.RedirectStandardOutput = $true
+  $ProcessInfo.RedirectStandardError = $true
+  $Launcher = New-Object Diagnostics.Process
+  $Launcher.StartInfo = $ProcessInfo
+  if (-not $Launcher.Start()) {
+    throw "failed to start launcher child process"
+  }
+  $Stdout = $Launcher.StandardOutput.ReadToEndAsync()
+  $Stderr = $Launcher.StandardError.ReadToEndAsync()
   $Finished = $Launcher.WaitForExit(15000)
+  if ($Finished) {
+    # Flush asynchronous output readers before examining their results.
+    $Launcher.WaitForExit()
+  }
   $Timer.Stop()
 
   if (-not $Finished) {
@@ -93,9 +109,16 @@ class Program { static void Main(string[] args) { Thread.Sleep(TimeSpan.FromSeco
     throw "launcher did not exit within the bounded test wait"
   }
 
-  Start-Sleep -Milliseconds 200
-  $Output = Strip-AnsiCodes ((Get-Content -Raw $StdoutPath -ErrorAction SilentlyContinue) +
-    (Get-Content -Raw $StderrPath -ErrorAction SilentlyContinue))
+  # The fake companion inherits the launcher's redirected handles and keeps
+  # ReadToEndAsync open until its 30-second sleep finishes. Stop it as soon as
+  # the launcher exits so output collection remains bounded as well.
+  if (Test-Path $PidFile) {
+    $AgentPid = (Get-Content -Raw $PidFile).Trim()
+    if ($AgentPid -match "^[0-9]+$") {
+      Stop-Process -Id ([int]$AgentPid) -Force -ErrorAction SilentlyContinue
+    }
+  }
+  $Output = Strip-AnsiCodes ($Stdout.Result + $Stderr.Result)
   if ($Launcher.ExitCode -ne 1) {
     throw "expected launcher exit 1, got $($Launcher.ExitCode): $Output"
   }
