@@ -351,12 +351,12 @@ launchd_configured() {
   # cannot cause the per-session restart churn PATH did.
   [ -f "$launchd_plist" ] &&
     grep -Fq "<string>$agent_path</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_client_id</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_url</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_audience</string>" "$launchd_plist" &&
-    grep -q "<string>$autospin_url</string>" "$launchd_plist" &&
-    grep -q "<string>${MONK_AGENT_LOCAL:-}</string>" "$launchd_plist" &&
-    grep -q "<string>${MONK_PLUGIN_VERSION:-}</string>" "$launchd_plist"
+    grep -Fq "<string>$auth_client_id</string>" "$launchd_plist" &&
+    grep -Fq "<string>$auth_url</string>" "$launchd_plist" &&
+    grep -Fq "<string>$auth_audience</string>" "$launchd_plist" &&
+    grep -Fq "<string>$autospin_url</string>" "$launchd_plist" &&
+    grep -Fq "<string>${MONK_AGENT_LOCAL:-}</string>" "$launchd_plist" &&
+    grep -Fq "<string>${MONK_PLUGIN_VERSION:-}</string>" "$launchd_plist"
 }
 
 # The background-process (non-launchd) path has no plist to introspect, so the
