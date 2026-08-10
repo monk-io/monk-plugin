@@ -160,3 +160,19 @@ To remove everything later:
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
+
+## Development & Testing
+
+### Quick Start
+1. Install dependencies
+2. Run tests
+3. Build the project
+
+### CI/CD
+See `.github/workflows/boost-quality.yml`.
+
+### Contributing
+Fork, create feature branches, add tests, open a PR.
+
+### License
+See LICENSE file.
