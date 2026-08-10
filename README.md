@@ -160,3 +160,16 @@ To remove everything later:
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
+
+
+## 🚀 Enhanced by Bounty Hunter
+
+### Quick Start
+```bash
+git clone https://github.com/monk-io/monk-plugin.git
+cd monk-plugin
+# Follow instructions above
+```
+
+### CI Status
+Automated testing and linting configured via GitHub Actions.
