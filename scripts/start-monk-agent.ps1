@@ -412,7 +412,8 @@ function Test-BackgroundStateConfigured {
     "auth_client_id=$AuthClientId",
     "auth_audience=$AuthAudience",
     "autospin_url=$AutospinUrl",
-    "plugin_version=$PluginVersion"
+    "plugin_version=$PluginVersion",
+    "launch_client=$Client"
   )
   $Lines = $State -split "`r?`n"
   foreach ($Line in $Expected) {
@@ -456,7 +457,8 @@ $Process.Id | Set-Content -NoNewline $PidFile
   "auth_client_id=$AuthClientId",
   "auth_audience=$AuthAudience",
   "autospin_url=$AutospinUrl",
-  "plugin_version=$PluginVersion"
+  "plugin_version=$PluginVersion",
+  "launch_client=$Client"
 ) -join "`n" | Set-Content -NoNewline $StateFile
 
 $ReadyTimer = [System.Diagnostics.Stopwatch]::StartNew()
