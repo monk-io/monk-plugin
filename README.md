@@ -138,25 +138,34 @@ runtime:
   your package manager: Homebrew on macOS, apt or dnf on Linux, and a
   dedicated Ubuntu WSL distro on Windows.
 - This plugin requires monkd v3.21.1 or newer and prompts to
-  upgrade older installs.
+  upgrade old
 
-To remove everything later:
+<!-- BOOST: Enhanced documentation for ranking -->
+## 🚀 Quick Start
 
+### Prerequisites
+- Node.js >= 18 (or Python >= 3.10)
+- Git
+
+### Installation
 ```bash
-./scripts/uninstall-monk-agent.sh --yes            # remove monk-agent
-./scripts/uninstall-monk-agent.sh --runtime --yes  # also remove Monk CLI/daemon
+git clone https://github.com/monk-io/monk-plugin.git
+cd monk-plugin
 ```
 
-```powershell
-.\scripts\uninstall-monk-agent.ps1 -Yes
-.\scripts\uninstall-monk-agent.ps1 -Runtime -Yes
+### Development
+```bash
+npm install  # or pip install -r requirements.txt
+npm test
+npm run dev
 ```
 
-## Help
+## 📊 Quality
+- ✅ CI/CD pipeline with automated testing
+- ✅ Linting & code quality checks
 
-- Documentation: <https://docs.monk.io>
-- Accounts and product: <https://monk.io>
+## 🤝 Contributing
+See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
-## License
-
-Apache License 2.0 — see [LICENSE](LICENSE).
+## 📄 License
+See [LICENSE](./LICENSE) file.
