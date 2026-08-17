@@ -22,10 +22,44 @@ $HealthUrl = "http://${AgentHost}:$Port/.well-known/oauth-protected-resource"
 
 New-Item -ItemType Directory -Force -Path $LogDir, $RunDir | Out-Null
 
+function Invoke-LoopbackHttp {
+  param(
+    [Parameter(Mandatory = $true)][string]$Uri,
+    [string]$Method = "GET",
+    [int]$TimeoutSec = 2
+  )
+
+  $Handler = [System.Net.Http.HttpClientHandler]::new()
+  $Handler.UseProxy = $false
+  $Client = [System.Net.Http.HttpClient]::new($Handler)
+  $Client.Timeout = [TimeSpan]::FromSeconds($TimeoutSec)
+  try {
+    if ($Method -eq "POST") {
+      $Content = [System.Net.Http.StringContent]::new("")
+      try {
+        $Response = $Client.PostAsync($Uri, $Content).GetAwaiter().GetResult()
+      } finally {
+        $Content.Dispose()
+      }
+    } else {
+      $Response = $Client.GetAsync($Uri).GetAwaiter().GetResult()
+    }
+    try {
+      $Response.EnsureSuccessStatusCode() | Out-Null
+      return $Response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+    } finally {
+      $Response.Dispose()
+    }
+  } finally {
+    $Client.Dispose()
+    $Handler.Dispose()
+  }
+}
+
 function Test-AgentRunning {
   try {
-    $Response = Invoke-WebRequest -Uri $HealthUrl -UseBasicParsing -TimeoutSec 2
-    return $Response.Content -match '"resource"'
+    $Content = Invoke-LoopbackHttp -Uri $HealthUrl -TimeoutSec 2
+    return $Content -match '"resource"'
   } catch {
     return $false
   }
@@ -59,8 +93,7 @@ function Show-SigninNudge {
   $Body = ""
   for ($Attempt = 0; $Attempt -lt 3; $Attempt++) {
     try {
-      $Response = Invoke-WebRequest -Uri $StatusUrl -UseBasicParsing -TimeoutSec 5
-      $Body = $Response.Content
+      $Body = Invoke-LoopbackHttp -Uri $StatusUrl -TimeoutSec 5
     } catch {
       $Body = ""
     }
@@ -90,7 +123,7 @@ function Show-SigninNudge {
   }
   $Client = if ($env:CLAUDE_PLUGIN_ROOT) { "claude-code" } elseif ($env:PLUGIN_ROOT) { "codex" } else { "unknown" }
   try {
-    Invoke-RestMethod -Uri "http://${AgentHost}:$Port/plugin/nudge?type=signin&client=$Client" -Method Post -TimeoutSec 2 | Out-Null
+    Invoke-LoopbackHttp -Uri "http://${AgentHost}:$Port/plugin/nudge?type=signin&client=$Client" -Method Post -TimeoutSec 2 | Out-Null
   } catch {
   }
   $Msg = "monk-agent is running but you are NOT signed in to Monk. The Monk MCP tools require sign-in. If the user asks to deploy, analyze, or operate anything with Monk, first tell them to run /mcp and authenticate the monk MCP server (this signs them in to Monk). Do NOT describe this as a connection or restart problem, and do NOT deploy via Docker or another platform to work around it."
