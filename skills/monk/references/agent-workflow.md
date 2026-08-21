@@ -51,6 +51,11 @@ the org's cluster RBAC policy. Optionally pick a target environment with
 `monk.cluster.peer.tag`, `monk.cluster.registry.ensure`,
 `monk.cluster.registry.reset`, `monk.cluster.exit`, or
 `monk.cluster.delete`. These tools trigger feed approvals themselves.
+`monk.cluster.delete` always destroys the currently selected cluster — it has
+no name parameter, and extra `clusterName`/`clusterId` properties are ignored
+(passing a name still deletes the selected cluster). List and confirm the
+selection (switch first if needed); if the named cluster is not in the list,
+do not call delete. Never pass `clusterName` or `clusterId`.
 Use `monk://workspace/cluster-context` to understand whether operations target
 local `monkd` or a saved cluster via `monkcode`. `monk.cluster.create`
 automatically selects the created cluster on success. Use
