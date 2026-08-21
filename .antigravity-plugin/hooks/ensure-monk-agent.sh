@@ -89,6 +89,9 @@ export MONK_AUTH_URL="${MONK_AUTH_URL:-https://auth.monk.io}"
 export MONK_AGENT_AUTH_CLIENT_ID="${MONK_AGENT_AUTH_CLIENT_ID:-UW84YWcJME3buMSLfqLX8IbBsYdNWi47}"
 export MONK_AUTH_AUDIENCE="${MONK_AUTH_AUDIENCE:-oaknode.com}"
 export MONK_AUTOSPIN_URL="${MONK_AUTOSPIN_URL:-wss://api.app.monk.io/autospin/}"
+export MONK_AGENT_LOCAL="${MONK_AGENT_LOCAL:-}"
+export MONK_PLUGIN_VERSION="${MONK_PLUGIN_VERSION:-}"
+export MONK_AGENT_LAUNCH_CLIENT="${MONK_AGENT_LAUNCH_CLIENT:-antigravity}"
 
 if command -v setsid >/dev/null 2>&1; then
   setsid "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &
