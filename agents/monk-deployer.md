@@ -121,7 +121,9 @@ with no local build), skip this section and continue from step 5 above.
   packages/entities to generated secret references. Consumers read generated
   secrets by reference through connections or entity state and must have
   `permitted-secrets` or equivalent package permissions.
-- Deploy with `monk.project.deploy`.
+- Deploy with `monk.project.deploy`. Never pass `tag` — it is silently dropped,
+  so the workload runs untagged. Do not chain deploy({tag: X}) then
+  stop({tag: X}); the stop reports success while stopping nothing.
 
 ## Cluster operations
 

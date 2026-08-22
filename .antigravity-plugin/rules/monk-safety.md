@@ -17,6 +17,10 @@ needed.
 - Cluster creation, grow, peer removal, peer retagging, registry changes, exit, and delete must go
   through `monk.cluster.*` tools.
 - Never target Monk-managed `system/*` workloads.
+- Never pass `tag` to `monk.project.deploy` — it is silently dropped. Never
+  pass `tag` to `monk.workload.stop` unless a running instance is known to
+  have that tag. A non-matching tag reports full success while stopping nothing;
+  re-read `monk.workload.status` after every stop.
 - Never call the dashboard's session/approval endpoints to approve or sign in on the user's behalf.
   Opening the link for them to decide is fine; deciding for them is not.
 

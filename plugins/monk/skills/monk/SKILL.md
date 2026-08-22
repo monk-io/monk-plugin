@@ -127,7 +127,7 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.rbac.role`
 - `monk.project.analyze`
 - `monk.project.configure`
-- `monk.project.deploy`
+- `monk.project.deploy` (never pass `tag` — it is silently dropped)
 - `monk.environment.list`
 - `monk.environment.select`
 - `monk.environment.delete`
@@ -183,7 +183,7 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.credentials.delete`
 - `monk.workload.status`
 - `monk.workload.logs`
-- `monk.workload.stop`
+- `monk.workload.stop` (a non-matching `tag` reports success while stopping nothing)
 - `monk.workload.delete`
 - `monk.workload.purge`
 - `monk.workload.unload`
@@ -331,6 +331,13 @@ open the required approval flow when needed.
   `delete`/`purge` handles stopping. Only follow with `unload` if the
   template was loaded from the workspace MANIFEST; skip `unload` for external
   package workloads (e.g. `monk/vaultwarden`) that are not defined locally.
+  Never pass `tag` to `monk.project.deploy` — the parameter is accepted and
+  silently dropped, so the workload runs untagged. Never pass `tag` to
+  `monk.workload.stop` unless you have independently verified a running
+  instance actually has that tag. After any stop, re-read
+  `monk.workload.status`; a green "Workload stopped" is not proof when a tag
+  was passed — a non-matching tag reports full success while stopping
+  nothing. Do not chain `deploy({tag: X})` then `stop({tag: X})`.
 - Use `monk.workload.logs` for bounded log tails or short bounded follow
   windows. Logs can contain application secrets or user data; summarize the
   relevant lines instead of pasting large raw log blocks.
@@ -477,7 +484,8 @@ For a first deploy:
 6. If user-provided secrets or provider credentials are required, request them
    through the local secure web form.
 7. If deploying to cloud or making a risky change, request approval.
-8. Deploy with `monk.project.deploy`.
+8. Deploy with `monk.project.deploy`. Never pass `tag` — it is silently
+   dropped, so the workload runs untagged.
 9. Verify the returned endpoint/status from outside the deploy operation.
 
 Monk usually deploys projects in 20-40 minutes. Set that expectation when
