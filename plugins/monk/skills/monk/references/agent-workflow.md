@@ -33,7 +33,9 @@ take with Monk, check official docs at `docs.monk.io` and use
    `permitted-secrets` or the package-specific equivalent.
 10. Request deploy-time provider and MANIFEST credentials through
     `monk.credentials.request`; use `monk.secret.request` only for a single ad
-    hoc secret with no provider mapping.
+    hoc secret with no provider mapping. If pushing local secrets to a
+    cluster with `monk.secret.push`, pass an explicit non-empty `names` list.
+    Never pass `names: []` — an empty `names` array pushes the entire local vault, not nothing.
 11. Deploy with `monk.project.deploy`; privileged tools open their own approval
     flow when needed.
 12. Verify the app or workload externally.

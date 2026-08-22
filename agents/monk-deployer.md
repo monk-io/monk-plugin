@@ -115,7 +115,8 @@ with no local build), skip this section and continue from step 5 above.
 - Request deploy-time provider and MANIFEST credentials with
   `monk.credentials.request`; never ask for secret values in chat. Use
   `monk.secret.request` only for a single ad hoc secret with no provider
-  mapping.
+  mapping. Never call `monk.secret.push` with `names: []` — an empty `names`
+  array pushes the entire local vault to the cluster, not nothing.
 - Request only user-provided inputs. MANIFEST `SECRET` lists secrets required
   from the user, while many resource values are computed by Monk or written by
   packages/entities to generated secret references. Consumers read generated
