@@ -34,8 +34,8 @@ take with Monk, check official docs at `docs.monk.io` and use
 10. Request deploy-time provider and MANIFEST credentials through
     `monk.credentials.request`; use `monk.secret.request` only for a single ad
     hoc secret with no provider mapping.
-11. Deploy with `monk.project.deploy`; privileged tools open their own approval
-    flow when needed.
+11. Deploy with `monk.project.deploy`. Never pass `tag` — it is silently dropped.
+    Privileged tools open their own approval flow when needed.
 12. Verify the app or workload externally.
 
 For cluster work, first resolve scope: call `monk.scope.status` and, if the
@@ -62,7 +62,9 @@ For workload lifecycle cleanup, use `monk.workload.status` to inspect first,
 then `monk.workload.stop`, `monk.workload.delete`/`purge`, or
 `monk.workload.unload`. `stop` preserves runnable state; `delete`/`purge`
 removes runnable/container state; `unload` removes the loaded template
-definition. Do not operate on Monk-managed `system/*` workloads.
+definition. Do not operate on Monk-managed `system/*` workloads. Never pass
+`tag` to `monk.workload.stop` unless you have verified a running instance
+has that tag; a non-matching tag reports success while stopping nothing.
 
 Long-running cluster/deploy/configure calls (`monk.cluster.create`/`grow`/
 `delete`, `monk.project.deploy`/`configure`, etc.) may return

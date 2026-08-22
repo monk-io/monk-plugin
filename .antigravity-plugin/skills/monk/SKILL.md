@@ -86,7 +86,7 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.rbac.role`
 - `monk.project.analyze`
 - `monk.project.configure`
-- `monk.project.deploy`
+- `monk.project.deploy` (never pass `tag` — it is silently dropped)
 - `monk.environment.list`
 - `monk.environment.select`
 - `monk.environment.delete`
@@ -142,7 +142,7 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.credentials.delete`
 - `monk.workload.status`
 - `monk.workload.logs`
-- `monk.workload.stop`
+- `monk.workload.stop` (a non-matching `tag` reports success while stopping nothing)
 - `monk.workload.delete`
 - `monk.workload.purge`
 - `monk.workload.unload`
@@ -271,7 +271,11 @@ open the required approval flow when needed.
   runnable/container state; `unload` removes the loaded template definition.
   Use `monk.workload.stop`, `monk.workload.delete`/`purge`, and
   `monk.workload.unload`; they open feed approvals themselves. Never target
-  Monk-managed `system/*` workloads.
+  Monk-managed `system/*` workloads. Never pass `tag` to
+  `monk.project.deploy` — it is silently dropped. Never pass `tag` to
+  `monk.workload.stop` unless you have independently verified a running
+  instance actually has that tag; a non-matching tag reports full success
+  while stopping nothing.
 - Use `monk.workload.logs` for bounded log tails or short bounded follow
   windows. Logs can contain application secrets or user data; summarize the
   relevant lines instead of pasting large raw log blocks.
@@ -395,7 +399,8 @@ For a first deploy:
 6. If user-provided secrets or provider credentials are required, request them
    through the local secure web form.
 7. If deploying to cloud or making a risky change, request approval.
-8. Deploy with `monk.project.deploy`.
+8. Deploy with `monk.project.deploy`. Never pass `tag` — it is silently
+   dropped, so the workload runs untagged.
 9. Verify the returned endpoint/status from outside the deploy operation.
 
 Monk usually deploys projects in 20-40 minutes. Set that expectation when

@@ -66,6 +66,10 @@ jobs:
         shell: bash
         run: ./tests/start-monk-agent-antigravity-python-path.sh
 
+      - name: Check deploy-tag / stop false-success skill guard
+        shell: bash
+        run: ./tests/deploy-tag-stop-false-success-guard.sh
+
   windows:
     name: windows-latest
     runs-on: windows-latest

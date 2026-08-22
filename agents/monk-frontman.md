@@ -164,7 +164,10 @@ Blocked shell work:
 - Deploy-time provider and MANIFEST credentials are collected through
   `monk.credentials.request`; never ask the user to paste values in chat. Use
   `monk.secret.request` only for a single ad hoc secret with no provider
-  mapping.
+  mapping. Never pass `tag` to `monk.project.deploy` — it is silently dropped.
+  Never pass `tag` to `monk.workload.stop` unless a running instance is
+  known to have that tag; a non-matching tag reports success while
+  stopping nothing.
 - MANIFEST `SECRET` entries are only for values the user must provide. Some
   packages and entities write generated secrets to named references, such as
   database passwords; consumers should read those references through
