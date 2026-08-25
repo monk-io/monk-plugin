@@ -1,32 +1,112 @@
-#!/usr/bin/env sh
-# PostToolUse hook for MANIFEST/MonkScript edits.
-# Asks local monk-agent for analyzer diagnostics and feeds concise results back
-# into Claude Code after template edits.
-#
-# All logic (path resolution, workspace discovery, the MCP call, and formatting)
-# lives in `monk-agent hook diagnostics`, so this wrapper depends only on the
-# binary the plugin already installs — no jq/curl/awk. The hook is best-effort:
-# a missing binary, missing agent, auth issues, or unavailable analyzer support
-# must never block the user's edit, so we always exit 0.
+#!/usr/bin/env bash
+# Monk diagnostics script for Unix-like systems
+# This script checks the health of the Monk runtime and agent
 
-set -eu
+set -euo pipefail
 
-# Output shape: "claude" (default, also Cursor) emits a superset; "codex" emits
-# ONLY the documented PostToolUse fields (Codex drops output with any unknown
-# top-level key). The Codex hook passes `--format codex`; others use the default.
-fmt="claude"
-if [ "${1:-}" = "--format" ] && [ -n "${2:-}" ]; then fmt="$2"; fi
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
 
-# On Windows the .ps1 sibling owns this hook. A host may spawn .sh hooks in an
-# interactive git-bash window (e.g. Cursor on Windows) whose stdin is a TTY,
-# where `cat` would block forever. Bow out on Windows-flavored bash, or whenever
-# stdin is not a pipe, so we never hang and never double up with the .ps1.
-case "$(uname -s 2>/dev/null)" in MINGW* | MSYS* | CYGWIN*) exit 0 ;; esac
-if [ -t 0 ]; then exit 0; fi
+log_info() { echo -e "${GREEN}[INFO]${NC} $*"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 
-agent="${MONK_AGENT_PATH:-${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent}"
-[ -x "$agent" ] || exit 0
+# Check if monkd is running and reachable
+check_monkd() {
+    log_info "Checking monkd connectivity..."
+    
+    # Check if monkd process is running
+    if ! pgrep -x "monkd" > /dev/null; then
+        log_error "monkd process not found"
+        return 1
+    fi
+    log_info "monkd process is running"
+    
+    # Check if the gRPC port is listening (port 2137)
+    # Note: Port 2137 speaks gRPC/WebSocket, not HTTP - so we check TCP connectivity only
+    if command -v nc > /dev/null 2>&1; then
+        if nc -z 127.0.0.1 2137 2>/dev/null; then
+            log_info "monkd gRPC port 2137 is reachable"
+        else
+            log_error "monkd gRPC port 2137 is not reachable"
+            return 1
+        fi
+    elif command -v ss > /dev/null 2>&1; then
+        if ss -ltn | grep -q ':2137 '; then
+            log_info "monkd gRPC port 2137 is listening"
+        else
+            log_error "monkd gRPC port 2137 is not listening"
+            return 1
+        fi
+    elif command -v netstat > /dev/null 2>&1; then
+        if netstat -ltn 2>/dev/null | grep -q ':2137 '; then
+            log_info "monkd gRPC port 2137 is listening"
+        else
+            log_error "monkd gRPC port 2137 is not listening"
+            return 1
+        fi
+    else
+        log_warn "Cannot check port 2137 (nc, ss, netstat not available)"
+    fi
+    
+    # Try to use monk CLI to verify full connectivity
+    if command -v monk > /dev/null 2>&1; then
+        if monk version > /dev/null 2>&1; then
+            log_info "monk CLI reports daemon is reachable"
+        else
+            log_warn "monk CLI cannot reach daemon (may need auth)"
+        fi
+    else
+        log_warn "monk CLI not in PATH"
+    fi
+    
+    return 0
+}
 
-cat | "$agent" hook diagnostics --format "$fmt" || exit 0
+# Check if monk-agent is running
+check_monk_agent() {
+    log_info "Checking monk-agent connectivity..."
+    
+    # Check if monk-agent process is running
+    if ! pgrep -f "monk-agent" > /dev/null; then
+        log_error "monk-agent process not found"
+        return 1
+    fi
+    log_info "monk-agent process is running"
+    
+    # Check MCP server port (default 2138)
+    if command -v nc > /dev/null 2>&1; then
+        if nc -z 127.0.0.1 2138 2>/dev/null; then
+            log_info "monk-agent MCP port 2138 is reachable"
+        else
+            log_warn "monk-agent MCP port 2138 is not reachable"
+        fi
+    fi
+    
+    return 0
+}
 
-exit 0
+# Main
+echo "=== Monk Diagnostics ==="
+echo ""
+
+check_monkd
+MONKD_STATUS=$?
+
+echo ""
+
+check_monk_agent
+AGENT_STATUS=$?
+
+echo ""
+echo "=== Summary ==="
+if [ $MONKD_STATUS -eq 0 ] && [ $AGENT_STATUS -eq 0 ]; then
+    log_info "All checks passed"
+    exit 0
+else
+    log_error "Some checks failed"
+    exit 1
+fi

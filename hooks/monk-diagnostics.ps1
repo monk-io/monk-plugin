@@ -1,33 +1,89 @@
-# PostToolUse hook for MANIFEST/MonkScript edits.
-# Asks local monk-agent for analyzer diagnostics and feeds concise results back
-# into the agent after template edits.
-#
-# All logic (path resolution, workspace discovery, the MCP call, and formatting)
-# lives in `monk-agent hook diagnostics`, so this wrapper depends only on the
-# binary the plugin already installs. Best-effort: a missing binary, missing
-# agent, auth issues, or unavailable analyzer support must never block the
-# user's edit, so we always exit 0.
-#
-# -Format selects the output shape: "claude" (default, also used by Cursor) emits
-# a superset of fields; "codex" emits ONLY the documented PostToolUse fields,
-# because Codex silently drops hook output that carries any unrecognized top-level
-# key (see diagnosticsResponseJson in src/hooks/cli.ts). The Codex hook passes
-# `-Format codex`; Claude/Cursor leave the default.
-param([ValidateSet('claude', 'codex')][string]$Format = 'claude')
+<#
+.SYNOPSIS
+    Monk diagnostics script for Windows PowerShell
+.DESCRIPTION
+    This script checks the health of the Monk runtime and agent
+#>
 
-# On non-Windows the .sh sibling handles this; bow out to avoid emitting the same
-# diagnostics twice. On Windows the .ps1 owns it: a host may spawn the .sh in an
-# interactive git-bash window whose stdin is a TTY (e.g. Cursor), where the .sh
-# can't read the payload - so the .sh bows out on Windows and the .ps1 does the
-# work here.
-if ($env:OS -ne 'Windows_NT' -and (Get-Command bash -ErrorAction SilentlyContinue)) { exit 0 }
+$ErrorActionPreference = "Stop"
 
-$agentDir = if ($env:MONK_AGENT_INSTALL_DIR) { $env:MONK_AGENT_INSTALL_DIR } else { Join-Path $HOME ".monk\bin" }
-$agent = if ($env:MONK_AGENT_PATH) { $env:MONK_AGENT_PATH } else { Join-Path $agentDir "monk-agent.exe" }
+function Write-Info { param([string]$Message) Write-Host "[INFO] $Message" -ForegroundColor Green }
+function Write-Warn { param([string]$Message) Write-Host "[WARN] $Message" -ForegroundColor Yellow }
+function Write-ErrorMsg { param([string]$Message) Write-Host "[ERROR] $Message" -ForegroundColor Red }
 
-if (-not (Test-Path $agent)) { exit 0 }
+# Check if monkd is running and reachable
+function Check-Monkd {
+    Write-Info "Checking monkd connectivity..."
+    
+    # Check if monkd process is running
+    $monkdProcess = Get-Process -Name "monkd" -ErrorAction SilentlyContinue
+    if (-not $monkdProcess) {
+        Write-ErrorMsg "monkd process not found"
+        return $false
+    }
+    Write-Info "monkd process is running (PID: $($monkdProcess.Id))"
+    
+    # Check if the gRPC port is listening (port 2137)
+    # Note: Port 2137 speaks gRPC/WebSocket, not HTTP - so we check TCP connectivity only
+    $listener = Get-NetTCPConnection -LocalPort 2137 -State Listen -ErrorAction SilentlyContinue
+    if ($listener) {
+        Write-Info "monkd gRPC port 2137 is listening"
+    } else {
+        Write-ErrorMsg "monkd gRPC port 2137 is not listening"
+        return $false
+    }
+    
+    # Try to use monk CLI to verify full connectivity
+    if (Get-Command "monk" -ErrorAction SilentlyContinue) {
+        try {
+            monk version | Out-Null
+            Write-Info "monk CLI reports daemon is reachable"
+        } catch {
+            Write-Warn "monk CLI cannot reach daemon (may need auth)"
+        }
+    } else {
+        Write-Warn "monk CLI not in PATH"
+    }
+    
+    return $true
+}
 
-# The binary reads the payload straight from stdin (see block-monk.ps1 for why we
-# do not read it into a PowerShell string and re-pipe it).
-try { & $agent hook diagnostics --format $Format } catch { }
-exit 0
+# Check if monk-agent is running
+function Check-MonkAgent {
+    Write-Info "Checking monk-agent connectivity..."
+    
+    # Check if monk-agent process is running
+    $agentProcess = Get-Process -Name "monk-agent" -ErrorAction SilentlyContinue
+    if (-not $agentProcess) {
+        Write-ErrorMsg "monk-agent process not found"
+        return $false
+    }
+    Write-Info "monk-agent process is running (PID: $($agentProcess.Id))"
+    
+    # Check MCP server port (default 2138)
+    $listener = Get-NetTCPConnection -LocalPort 2138 -State Listen -ErrorAction SilentlyContinue
+    if ($listener) {
+        Write-Info "monk-agent MCP port 2138 is listening"
+    } else {
+        Write-Warn "monk-agent MCP port 2138 is not listening"
+    }
+    
+    return $true
+}
+
+# Main
+Write-Host "=== Monk Diagnostics ==="
+Write-Host ""
+
+$monkdOk = Check-Monkd
+Write-Host ""
+$agentOk = Check-MonkAgent
+Write-Host ""
+Write-Host "=== Summary ==="
+if ($monkdOk -and $agentOk) {
+    Write-Info "All checks passed"
+    exit 0
+} else {
+    Write-ErrorMsg "Some checks failed"
+    exit 1
+}
