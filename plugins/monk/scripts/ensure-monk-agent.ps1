@@ -1,235 +1,104 @@
+<#
+.SYNOPSIS
+    Ensure monk-agent is running. If not, start it.
+    Also handles WSL Ubuntu-Monk distro stopped state recovery.
+#>
+
 $ErrorActionPreference = "Stop"
 
-# Windows PowerShell 5.1 renders an Invoke-WebRequest progress record per read
-# chunk, and that rendering — not the network — dominates a large download. This
-# installer runs inside the blocking SessionStart hook, so the cost is charged
-# directly against the host's startup budget. Measured on 5.1.19041 pulling the
-# 62MB windows agent archive over a ~10MB/s link:
-#
-#   Invoke-WebRequest -OutFile, progress on    46.5s  (1.3 MB/s)
-#   Invoke-WebRequest -OutFile, progress off    6.0s  (10.4 MB/s)
-#   WebClient.DownloadFile                      5.9s  (10.6 MB/s)
-#
-# A 7.7x penalty, ~40s of pure progress rendering. That is enough on its own to
-# blow the VSCode extension's 60s subprocess-init ceiling on any release that
-# ships a new agent binary: an observed upgrade spent 46.5s here and had the
-# agent up 3s after the extension had already given up on the session. Suppressed
-# rather than switched to WebClient because silencing progress already reaches
-# line rate, so the cmdlet's redirect/proxy/TLS handling is worth keeping.
-#
-# Deliberately script-scoped: this process is a short-lived installer whose only
-# console output is the "Installing monk-agent" line, so there is no interactive
-# progress worth preserving. Also covers Expand-Archive below (1.8s, not a
-# bottleneck — left alone).
-$ProgressPreference = "SilentlyContinue"
+$LogFile = "$env:USERPROFILE\.monk\ensure-monk-agent.log"
+$LogDir = Split-Path $LogFile
+if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
 
-$InstallDir = if ($env:MONK_AGENT_INSTALL_DIR) { $env:MONK_AGENT_INSTALL_DIR } else {
-  Join-Path $HOME ".monk\bin"
-}
-$Channel = if ($env:MONK_AGENT_CHANNEL) { $env:MONK_AGENT_CHANNEL } else { "stable" }
-$DownloadBase = if ($env:MONK_AGENT_DOWNLOAD_BASE) { $env:MONK_AGENT_DOWNLOAD_BASE } else {
-  "https://get.monk.io/$Channel"
-}
-$AutoUpdate = if ($env:MONK_AGENT_AUTO_UPDATE) { $env:MONK_AGENT_AUTO_UPDATE } else { "1" }
-
-$Target = Join-Path $InstallDir "monk-agent.exe"
-$ChecksumInstalled = Join-Path $InstallDir "monk-agent.sha256"
-$MonkHome = if ($env:MONK_AGENT_HOME) { $env:MONK_AGENT_HOME } else { Join-Path $HOME ".monk" }
-$PidFile = Join-Path $MonkHome "agent\launcher\run\monk-agent.pid"
-
-function Get-FileSha256 {
-  param([string]$Path)
-  if (-not (Test-Path $Path)) {
-    return ""
-  }
-
-  if (Get-Command Get-FileHash -ErrorAction SilentlyContinue) {
-    return (Get-FileHash -Algorithm SHA256 $Path).Hash.ToLowerInvariant()
-  }
-
-  $Stream = [System.IO.File]::OpenRead($Path)
-  try {
-    $Sha256 = [System.Security.Cryptography.SHA256]::Create()
-    try {
-      $Hash = $Sha256.ComputeHash($Stream)
-    } finally {
-      $Sha256.Dispose()
-    }
-  } finally {
-    $Stream.Dispose()
-  }
-  return ([System.BitConverter]::ToString($Hash) -replace "-", "").ToLowerInvariant()
+function Write-Log {
+    param([string]$Message)
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    "[$timestamp] $Message" | Out-File -FilePath $LogFile -Append -Encoding utf8
 }
 
-function Test-SameFilePath {
-  param([string]$Actual, [string]$Expected)
-  if (-not $Actual -or -not $Expected) {
-    return $false
-  }
-  try {
-    return [string]::Equals(
-      [IO.Path]::GetFullPath($Actual),
-      [IO.Path]::GetFullPath($Expected),
-      [StringComparison]::OrdinalIgnoreCase
-    )
-  } catch {
-    return $false
-  }
-}
+Write-Log "ensure-monk-agent started"
 
-function Stop-ManagedAgent {
-  if (-not (Test-Path $PidFile)) {
-    return
-  }
-
-  $RawPid = (Get-Content -Raw $PidFile).Trim()
-  if (-not $RawPid) {
-    return
-  }
-
-  # Validate the PID is numeric before casting; a malformed PID file (text,
-  # whitespace, BOM artifacts) would otherwise throw a terminating error under
-  # ErrorActionPreference = "Stop". Treat non-numeric content as stale state.
-  $ParsedPid = 0
-  if (-not [int]::TryParse($RawPid, [ref]$ParsedPid) -or $ParsedPid -le 0) {
-    Remove-Item -Force $PidFile -ErrorAction SilentlyContinue
-    return
-  }
-
-  $OldProcess = Get-Process -Id $ParsedPid -ErrorAction SilentlyContinue
-  if (-not $OldProcess) {
-    Remove-Item -Force $PidFile -ErrorAction SilentlyContinue
-    return
-  }
-
-  $ProcessPath = ""
-  try {
-    $ProcessPath = $OldProcess.Path
-  } catch {
-    $ProcessPath = ""
-  }
-
-  if (Test-SameFilePath $ProcessPath $Target) {
-    Stop-Process -Id $OldProcess.Id -Force -ErrorAction SilentlyContinue
-    try {
-      Wait-Process -Id $OldProcess.Id -Timeout 10 -ErrorAction SilentlyContinue
-    } catch {
-      Start-Sleep -Milliseconds 500
-    }
-  }
-
-  Remove-Item -Force $PidFile -ErrorAction SilentlyContinue
-}
-
-if ($AutoUpdate -eq "0" -or $AutoUpdate -eq "false") {
-  if (Test-Path $Target) {
-    Write-Output $Target
+# Check if monk-agent process is running
+$monkAgent = Get-Process -Name "monk-agent" -ErrorAction SilentlyContinue
+if ($monkAgent) {
+    Write-Log "monk-agent already running"
     exit 0
-  }
-
-  $Existing = Get-Command monk-agent.exe -ErrorAction SilentlyContinue
-  if ($Existing) {
-    Write-Output $Existing.Source
-    exit 0
-  }
 }
 
-$Arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
-switch ($Arch) {
-  "x64" { $Artifact = "monk-agent-windows-latest.zip" }
-  default {
-    Write-Error "Unsupported Windows architecture for monk-agent bootstrap: $Arch"
-    exit 2
-  }
+Write-Log "monk-agent not running, checking prerequisites"
+
+# Function to check and recover Ubuntu-Monk WSL distro
+function Check-AndRecoverWslDistro {
+    # Check if wsl.exe is available
+    if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
+        return $true
+    }
+
+    $distroInfo = wsl.exe -l -v 2>$null | Where-Object { $_ -match 'Ubuntu-Monk' }
+    if (-not $distroInfo) {
+        Write-Log "Ubuntu-Monk distro not found in WSL"
+        return $true
+    }
+
+    # Parse state (last column)
+    $parts = $distroInfo -split '\s+'
+    $state = $parts[-1].Trim()
+    
+    if ($state -eq "Stopped") {
+        Write-Log "Ubuntu-Monk distro is Stopped, attempting recovery..."
+        
+        # First try graceful shutdown
+        wsl.exe --shutdown 2>$null
+        Start-Sleep -Seconds 2
+        
+        # Start the distro
+        try {
+            wsl.exe -d Ubuntu-Monk -e true 2>$null | Out-Null
+            Write-Log "Ubuntu-Monk distro started successfully"
+            Start-Sleep -Seconds 3  # Give monkd time to start
+            return $true
+        } catch {
+            Write-Log "Failed to start Ubuntu-Monk distro automatically: $_"
+            return $false
+        }
+    }
+    
+    return $true
 }
 
-$Url = "$DownloadBase/windows/$Artifact"
-$ChecksumUrl = "$Url.sha256"
-$ArchiveTmp = Join-Path $InstallDir ".monk-agent.tmp.zip"
-$ChecksumTmp = Join-Path $InstallDir ".monk-agent.tmp.sha256"
-$ExtractDir = Join-Path $InstallDir ".monk-agent.extract"
-New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+# Attempt WSL distro recovery if needed
+Check-AndRecoverWslDistro
 
-# Launchers on different ports hold different launcher mutexes but still share
-# these installer paths, so serialize the complete update transaction here.
-$InstallerMutex = New-Object System.Threading.Mutex($false, "Local\monk-agent-installer")
-$InstallerMutexOwned = $false
-try {
-  try {
-    $InstallerMutexOwned = $InstallerMutex.WaitOne()
-  } catch [System.Threading.AbandonedMutexException] {
-    # A previous installer died while holding the mutex; ownership transfers to us.
-    $InstallerMutexOwned = $true
-  }
-
-  # Windows PowerShell 5.1 otherwise delegates response parsing to the Internet
-  # Explorer engine, which is unavailable on Server Core and can be uninitialized
-  # on fresh desktop profiles. Downloads are files, so always use the independent
-  # basic parser (ENG-501).
-  try {
-    Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumTmp -UseBasicParsing
-  } catch {
-    # A transient failure fetching the update-check sidecar must not abort a
-    # cold start when a previously-verified local binary is already installed
-    # (ENG-422) -- only fall back when that binary's hash still matches the
-    # checksum recorded at install time.
-    $Installed = ""
-    if ((Test-Path $Target) -and (Test-Path $ChecksumInstalled)) {
-      try {
-        $Installed = ((Get-Content -Raw $ChecksumInstalled).Trim() -split "\s+")[0].ToLowerInvariant()
-      } catch {
-        $Installed = ""
-      }
-    }
-
-    $TargetSize = if (Test-Path $Target) { (Get-Item $Target).Length } else { 0 }
-    $ActualInstalled = if ($TargetSize -gt 0) { Get-FileSha256 $Target } else { "" }
-    if ($TargetSize -gt 0 -and
-        $Installed -match "^[0-9a-f]{64}$" -and
-        $ActualInstalled -eq $Installed) {
-      Remove-Item -Force $ChecksumTmp -ErrorAction SilentlyContinue
-      Write-Warning "Unable to check for monk-agent updates; using the previously checksummed installation at $Target."
-      Write-Output $Target
-      exit 0
-    }
-
-    throw
-  }
-
-  $Expected = ((Get-Content -Raw $ChecksumTmp).Trim() -split "\s+")[0].ToLowerInvariant()
-
-  if ((Test-Path $Target) -and (Get-Item $Target).Length -gt 0 -and (Test-Path $ChecksumInstalled)) {
-    $Installed = ((Get-Content -Raw $ChecksumInstalled).Trim() -split "\s+")[0].ToLowerInvariant()
-    if ($Installed -eq $Expected) {
-      Remove-Item -Force $ChecksumTmp
-      Write-Output $Target
-      exit 0
-    }
-  }
-
-  Write-Host "Installing monk-agent from $Url"
-  Invoke-WebRequest -Uri $Url -OutFile $ArchiveTmp -UseBasicParsing
-
-  $Actual = Get-FileSha256 $ArchiveTmp
-  if ($Actual -ne $Expected) {
-    Write-Error "Checksum verification failed for monk-agent."
-    exit 1
-  }
-
-  if (Test-Path $ExtractDir) {
-    Remove-Item -Recurse -Force $ExtractDir
-  }
-  New-Item -ItemType Directory -Force -Path $ExtractDir | Out-Null
-  Expand-Archive -Force -Path $ArchiveTmp -DestinationPath $ExtractDir
-  Stop-ManagedAgent
-  Move-Item -Force (Join-Path $ExtractDir "monk-agent.exe") $Target
-  "$Expected  $Artifact" | Set-Content -NoNewline $ChecksumInstalled
-  Remove-Item -Recurse -Force $ExtractDir
-  Remove-Item -Force $ArchiveTmp, $ChecksumTmp
-  Write-Output $Target
-} finally {
-  if ($InstallerMutexOwned) {
-    $InstallerMutex.ReleaseMutex()
-  }
-  $InstallerMutex.Dispose()
+# Function to check if monkd is reachable on port 2137
+function Test-Monkd {
+    try {
+        $tcp = New-Object System.Net.Sockets.TcpClient
+        $connect = $tcp.BeginConnect("127.0.0.1", 2137, $null, $null)
+        $wait = $connect.AsyncWaitHandle.WaitOne(1000)
+        if ($wait -and $tcp.Connected) {
+            $tcp.Close()
+            return $true
+        }
+        $tcp.Close()
+    } catch {}
+    return $false
 }
+
+# Wait for monkd to become available (up to 30 seconds)
+Write-Log "Waiting for monkd on 127.0.0.1:2137..."
+for ($i = 1; $i -le 30; $i++) {
+    if (Test-Monkd) {
+        Write-Log "monkd is reachable"
+        break
+    }
+    Start-Sleep -Seconds 1
+    if ($i -eq 30) {
+        Write-Log "ERROR: monkd not reachable after 30 seconds"
+        Write-Log "Hint: If using WSL, try 'wsl --shutdown' then restart Ubuntu-Monk"
+        exit 1
+    }
+}
+
+# Start monk-agent
+Write-Log "Starting monk-agent..."
+& monk-agent *>&1 | Tee-Object -FilePath $LogFile -Append

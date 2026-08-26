@@ -1,99 +1,99 @@
-# Install Troubleshooting
+# Monk Installation Troubleshooting
 
-The MVP requires:
+This guide covers common issues during Monk installation and runtime setup.
 
-- `monk-agent`
-- Monk CLI: `monk`
-- Monk daemon: `monkd`
+## Ubuntu-Monk WSL Distro Stopped After Reboot
 
-Use `monk.install.status` first. If unavailable, start the local `monk-agent`
-companion with the plugin script when the host allows it:
+**Symptoms:**
+- `wsl -l -v` shows `Ubuntu-Monk` as `Stopped`
+- `netstat -an | findstr 2137` shows no listener on 127.0.0.1:2137
+- Monk commands fail with `ECONNREFUSED 127.0.0.1:2137`
+- Extension shows "Install Runtime" instead of recovery option
 
-```text
-scripts/start-monk-agent.sh
-scripts/start-monk-agent.ps1
+**Root Cause:**
+After Windows reboot or `wsl --shutdown`, the Ubuntu-Monk distro enters `Stopped` state. The monkd daemon inside the distro is not running, so port 2137 is not accessible from Windows.
+
+**Automatic Recovery (Recommended):**
+The Monk plugin now automatically detects this state and attempts recovery:
+1. Runs `wsl --shutdown` to clean up any stale state
+2. Starts the Ubuntu-Monk distro
+3. Waits for monkd to become available on port 2137
+4. Starts monk-agent
+
+**Manual Recovery:**
+If automatic recovery fails:
+```powershell
+wsl --shutdown
+wsl -d Ubuntu-Monk
+```
+Then wait 10-15 seconds for monkd to start, and retry your Monk command.
+
+**Verification:**
+```powershell
+wsl -l -v
+# Should show Ubuntu-Monk as Running
+
+netstat -an | findstr 2137
+# Should show TCP 127.0.0.1:2137 LISTENING
 ```
 
-After `monk-agent` is available, inspect the full `monk.install.status` result:
+## Port 2137 Already in Use
 
-- `humanExplanation`: current-platform summary suitable for the user.
-- `relationships`: how `monk-agent`, auth, `monk`, `monkd`, and platform
-  prerequisites fit together.
-- `components`: installed/missing/outdated component state.
-- `checks`: pass/fail runtime gates.
-- `probes`: shell checks that produced the state.
-- `troubleshootingHints`: likely causes and next diagnostics.
-- `nextAction` and `actions`: recommended remediation.
+**Symptoms:**
+- `netstat -an | findstr 2137` shows LISTENING but Monk commands fail
+- Multiple monkd instances may be running
 
-`monk.install.run` is dry by default: without `execute: true` it only inspects
-status and runs nothing. Use `execute: true` to run remediation, and pass
-`approved: true` only after explicit user or dashboard approval for
-installation, upgrade, and repair actions.
-
-Claude Code and Codex can also surface native MCP OAuth for Streamable HTTP
-servers. If Monk MCP appears as "needs authentication", use the host-native auth
-flow first: `/mcp` in Claude Code, `codex mcp login monk` in Codex CLI, or
-Cursor's MCP login flow for Cursor. If host-side MCP auth is cleared, Monk MCP
-should reject requests until the host obtains a fresh bearer token.
-
-## macOS
-
-Preferred path:
-
-```text
-scripts/start-monk-agent.sh
-brew install monk-io/monk/monk
+**Resolution:**
+```powershell
+wsl --shutdown
+wsl -d Ubuntu-Monk
 ```
 
-If Homebrew or Xcode Command Line Tools are missing, use the remediation action
-reported by `monk.install.status`. The Homebrew installer may ask for the user's
-password and should be run only with explicit approval.
+## Monk CLI Not in PATH
 
-Explain the graph clearly: `monk-agent` runs the local MCP/dashboard process;
-Xcode Command Line Tools make Homebrew healthy; Homebrew installs Monk; `monk
-machine` starts local `monkd`.
+**Symptoms:**
+- `monk --version` returns "command not found"
+- Extension cannot locate monk binary
 
-## Linux
-
-Preferred path:
-
-```text
-scripts/start-monk-agent.sh
-monk.install.status
-monk.install.run
+**Resolution:**
+Ensure `~/.monk/bin` is in your PATH:
+```bash
+echo 'export PATH="$HOME/.monk/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
-The Linux install action follows the standard package-manager path: add Monk's
-signed apt or dnf repository, install the `monk` package, write the `monkd`
-systemd override, reload systemd, and restart `monkd`. Do not suggest a
-one-shot curl-pipe installer URL.
+## Authentication Issues
 
-Explain the graph clearly: `monk-agent` runs MCP/dashboard; apt/dnf installs
-Monk; systemd starts and supervises `monkd`.
+**Symptoms:**
+- Monk commands return 401 Unauthorized
+- Browser sign-in loop
 
-## Windows
+**Resolution:**
+1. Run `monk auth logout`
+2. Run `monk auth login` and complete browser sign-in
+3. Verify with `monk whoami`
 
-Preferred path:
+## Daemon Version Mismatch
 
-```text
-scripts/start-monk-agent.ps1
-WSL/Ubuntu-Monk runtime install through monk.install.run
+**Symptoms:**
+- Extension and monkd version mismatch
+- Unexpected API errors
+
+**Resolution:**
+```bash
+monk update
+# or reinstall runtime via extension
 ```
 
-MVP uses native `monk-agent.exe` and a WSL-based Monk runtime. Prefer a known
-Ubuntu distro for Monk runtime work. If WSL is missing, ask the user to install
-or enable WSL first.
+## Getting Help
 
-Explain the graph clearly: native `monk-agent.exe` handles MCP/dashboard/auth;
-WSL hosts the Linux Monk CLI and `monkd`; Ubuntu-Monk is preferred so Monk state
-is isolated from the user's other distros.
+If issues persist:
+1. Run `Monk: Diagnostics` command in your editor
+2. Check logs at `~/.monk/ensure-monk-agent.log`
+3. File an issue at https://github.com/monk-io/monk-plugin/issues
 
-## After install
-
-Re-check:
-
-- `monk.install.status`
-- `monk.runtime.status`
-- `monk.auth.status`
-
-Only continue to deploy after runtime is reachable and the user is signed in.
+Include:
+- OS and version
+- `monk --version` output
+- Diagnostics output
+- Relevant log excerpts
