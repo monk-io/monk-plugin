@@ -1,32 +1,67 @@
-#!/usr/bin/env sh
-# PostToolUse hook for MANIFEST/MonkScript edits.
-# Asks local monk-agent for analyzer diagnostics and feeds concise results back
-# into Claude Code after template edits.
-#
-# All logic (path resolution, workspace discovery, the MCP call, and formatting)
-# lives in `monk-agent hook diagnostics`, so this wrapper depends only on the
-# binary the plugin already installs — no jq/curl/awk. The hook is best-effort:
-# a missing binary, missing agent, auth issues, or unavailable analyzer support
-# must never block the user's edit, so we always exit 0.
+#!/usr/bin/env bash
+# Monk diagnostics hook - checks health of monk installation
 
-set -eu
+set -euo pipefail
 
-# Output shape: "claude" (default, also Cursor) emits a superset; "codex" emits
-# ONLY the documented PostToolUse fields (Codex drops output with any unknown
-# top-level key). The Codex hook passes `--format codex`; others use the default.
-fmt="claude"
-if [ "${1:-}" = "--format" ] && [ -n "${2:-}" ]; then fmt="$2"; fi
+echo "=== Monk Diagnostics ==="
+echo "Date: $(date)"
+echo ""
 
-# On Windows the .ps1 sibling owns this hook. A host may spawn .sh hooks in an
-# interactive git-bash window (e.g. Cursor on Windows) whose stdin is a TTY,
-# where `cat` would block forever. Bow out on Windows-flavored bash, or whenever
-# stdin is not a pipe, so we never hang and never double up with the .ps1.
-case "$(uname -s 2>/dev/null)" in MINGW* | MSYS* | CYGWIN*) exit 0 ;; esac
-if [ -t 0 ]; then exit 0; fi
+echo "--- monk-agent process ---"
+if pgrep -f "monk-agent" >/dev/null 2>&1; then
+    echo "monk-agent: RUNNING"
+    pgrep -f "monk-agent" | while read pid; do
+        echo "  PID: $pid"
+    done
+else
+    echo "monk-agent: NOT RUNNING"
+fi
+echo ""
 
-agent="${MONK_AGENT_PATH:-${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent}"
-[ -x "$agent" ] || exit 0
+echo "--- monkd connectivity (127.0.0.1:2137) ---"
+if command -v nc >/dev/null 2>&1; then
+    if nc -z 127.0.0.1 2137 >/dev/null 2>&1; then
+        echo "monkd: REACHABLE"
+    else
+        echo "monkd: UNREACHABLE (ECONNREFUSED)"
+    fi
+elif command -v timeout >/dev/null 2>&1; then
+    if timeout 1 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/2137" 2>/dev/null; then
+        echo "monkd: REACHABLE"
+    else
+        echo "monkd: UNREACHABLE (ECONNREFUSED)"
+    fi
+else
+    if (exec 3<>/dev/tcp/127.0.0.1/2137) 2>/dev/null; then
+        exec 3<&-
+        echo "monkd: REACHABLE"
+    else
+        echo "monkd: UNREACHABLE (ECONNREFUSED)"
+    fi
+fi
+echo ""
 
-cat | "$agent" hook diagnostics --format "$fmt" || exit 0
+echo "--- WSL Ubuntu-Monk distro status ---"
+if command -v wsl.exe >/dev/null 2>&1; then
+    wsl.exe -l -v 2>/dev/null | grep -i "ubuntu-monk" || echo "Ubuntu-Monk: NOT FOUND"
+else
+    echo "WSL: NOT AVAILABLE"
+fi
+echo ""
 
-exit 0
+echo "--- monk version ---"
+if command -v monk >/dev/null 2>&1; then
+    monk --version 2>/dev/null || echo "monk CLI not in PATH"
+else
+    echo "monk CLI: NOT IN PATH"
+fi
+echo ""
+
+echo "--- Recovery hint ---"
+if command -v wsl.exe >/dev/null 2>&1; then
+    distro_state=$(wsl.exe -l -v 2>/dev/null | grep -i "ubuntu-monk" | awk '{print $NF}' | tr -d '\r')
+    if [[ "$distro_state" == "Stopped" ]]; then
+        echo "ISSUE DETECTED: Ubuntu-Monk distro is Stopped"
+        echo "RECOVERY: Run 'wsl --shutdown' then start Ubuntu-Monk, or use 'Monk: Restart Runtime' command"
+    fi
+fi
