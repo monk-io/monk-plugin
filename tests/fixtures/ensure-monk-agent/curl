@@ -1,0 +1,52 @@
+#!/usr/bin/env sh
+set -eu
+
+connect_timeout=""
+speed_limit=""
+speed_time=""
+output=""
+url=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --connect-timeout)
+      shift
+      connect_timeout="${1:-}"
+      ;;
+    --speed-limit)
+      shift
+      speed_limit="${1:-}"
+      ;;
+    --speed-time)
+      shift
+      speed_time="${1:-}"
+      ;;
+    -o)
+      shift
+      output="${1:-}"
+      ;;
+    http://*|https://*)
+      url="$1"
+      ;;
+  esac
+  [ "$#" -gt 0 ] && shift
+done
+
+bounded=0
+if [ "$connect_timeout" = "$TEST_CONNECT_TIMEOUT" ] &&
+   [ "$speed_limit" = "1" ] &&
+   [ "$speed_time" = "$TEST_STALL_TIMEOUT" ]; then
+  bounded=1
+fi
+printf '%s bounded=%s\n' "$url" "$bounded" >>"$TEST_CURL_CALLS"
+
+case "$url" in
+  *.sha256)
+    printf '%064d  monk-agent.tar.gz\n' 0 >"$output"
+    exit 0
+    ;;
+  *)
+    # Simulate an archive transfer that hit the configured low-speed deadline.
+    exit 28
+    ;;
+esac

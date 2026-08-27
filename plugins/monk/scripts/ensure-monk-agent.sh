@@ -17,8 +17,19 @@ install_dir="${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}"
 channel="${MONK_AGENT_CHANNEL:-stable}"
 download_base="${MONK_AGENT_DOWNLOAD_BASE:-"https://get.monk.io/$channel"}"
 auto_update="${MONK_AGENT_AUTO_UPDATE:-1}"
+# Bound connection setup and periods with no meaningful progress without
+# imposing an absolute deadline on a slow but advancing agent archive.
+download_connect_timeout="${MONK_AGENT_DOWNLOAD_CONNECT_TIMEOUT:-10}"
+download_stall_timeout="${MONK_AGENT_DOWNLOAD_STALL_TIMEOUT:-30}"
 target="$install_dir/monk-agent"
 checksum_installed="$install_dir/monk-agent.sha256"
+
+case "$download_connect_timeout" in
+  *[!0-9]*|0*) echo "MONK_AGENT_DOWNLOAD_CONNECT_TIMEOUT must be a positive integer number of seconds." >&2; exit 2 ;;
+esac
+case "$download_stall_timeout" in
+  *[!0-9]*|0*) echo "MONK_AGENT_DOWNLOAD_STALL_TIMEOUT must be a positive integer number of seconds." >&2; exit 2 ;;
+esac
 
 os="$(uname -s)"
 arch="$(uname -m)"
@@ -75,9 +86,11 @@ fi
 
 download_checksum() {
   if command -v curl >/dev/null 2>&1; then
-    curl -fL "$checksum_url" -o "$checksum_tmp"
+    curl -fL --connect-timeout "$download_connect_timeout" \
+      --speed-limit 1 --speed-time "$download_stall_timeout" \
+      "$checksum_url" -o "$checksum_tmp"
   elif command -v wget >/dev/null 2>&1; then
-    wget -O "$checksum_tmp" "$checksum_url"
+    wget -t 1 -T "$download_stall_timeout" -O "$checksum_tmp" "$checksum_url"
   else
     echo "curl or wget is required to check for monk-agent updates." >&2
     return 2
@@ -127,9 +140,11 @@ fi
 
 echo "Installing monk-agent from $url" >&2
 if command -v curl >/dev/null 2>&1; then
-  curl -fL "$url" -o "$archive_tmp"
+  curl -fL --connect-timeout "$download_connect_timeout" \
+    --speed-limit 1 --speed-time "$download_stall_timeout" \
+    "$url" -o "$archive_tmp"
 elif command -v wget >/dev/null 2>&1; then
-  wget -O "$archive_tmp" "$url"
+  wget -t 1 -T "$download_stall_timeout" -O "$archive_tmp" "$url"
 fi
 
 if command -v shasum >/dev/null 2>&1; then
