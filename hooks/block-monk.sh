@@ -21,8 +21,52 @@ if [ -t 0 ]; then exit 0; fi
 input="$(cat)"
 
 agent="${MONK_AGENT_PATH:-${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent}"
+helper_timeout="${MONK_BLOCK_MONK_HELPER_TIMEOUT:-2}"
+case "$helper_timeout" in
+  *[!0-9]*|0*) helper_timeout=2 ;;
+esac
+
+run_agent_helper() {
+  helper_dir="$(mktemp -d "${TMPDIR:-/tmp}/monk-block-monk.XXXXXX")" || return 1
+  helper_input="$helper_dir/input"
+  helper_output="$helper_dir/output"
+  helper_error="$helper_dir/error"
+  helper_timed_out="$helper_dir/timed-out"
+  printf '%s' "$input" >"$helper_input"
+
+  "$agent" hook block-monk --format claude \
+    <"$helper_input" >"$helper_output" 2>"$helper_error" &
+  helper_pid=$!
+  (
+    sleep "$helper_timeout"
+    : >"$helper_timed_out"
+    kill -TERM "$helper_pid" 2>/dev/null || true
+  ) &
+  watchdog_pid=$!
+
+  if wait "$helper_pid"; then
+    helper_status=0
+  else
+    helper_status=$?
+  fi
+  kill "$watchdog_pid" 2>/dev/null || true
+  wait "$watchdog_pid" 2>/dev/null || true
+
+  if [ "$helper_status" -eq 0 ]; then
+    cat "$helper_error" >&2
+    cat "$helper_output"
+    rm -rf "$helper_dir"
+    return 0
+  fi
+  if [ ! -f "$helper_timed_out" ]; then
+    cat "$helper_error" >&2
+  fi
+  rm -rf "$helper_dir"
+  return 1
+}
+
 if [ -x "$agent" ]; then
-  if printf '%s' "$input" | "$agent" hook block-monk --format claude; then
+  if run_agent_helper; then
     exit 0
   fi
 fi
