@@ -32,6 +32,53 @@ $DownloadBase = if ($env:MONK_AGENT_DOWNLOAD_BASE) { $env:MONK_AGENT_DOWNLOAD_BA
 }
 $AutoUpdate = if ($env:MONK_AGENT_AUTO_UPDATE) { $env:MONK_AGENT_AUTO_UPDATE } else { "1" }
 
+function Get-PositiveTimeoutSeconds {
+  param([string]$Name, [int]$DefaultValue)
+  $Raw = [Environment]::GetEnvironmentVariable($Name)
+  if ([string]::IsNullOrWhiteSpace($Raw)) {
+    return $DefaultValue
+  }
+  $Parsed = 0
+  if (-not [int]::TryParse($Raw, [ref]$Parsed) -or $Parsed -le 0) {
+    [Console]::Error.WriteLine("$Name must be a positive integer number of seconds.")
+    exit 2
+  }
+  return $Parsed
+}
+
+$DownloadConnectTimeout = Get-PositiveTimeoutSeconds "MONK_AGENT_DOWNLOAD_CONNECT_TIMEOUT" 10
+$DownloadStallTimeout = Get-PositiveTimeoutSeconds "MONK_AGENT_DOWNLOAD_STALL_TIMEOUT" 30
+
+# Windows PowerShell's Invoke-WebRequest has no no-progress timeout for a file
+# body. A distribution endpoint can accept the connection (or send headers and a
+# few bytes) and then hold the blocking SessionStart installer indefinitely.
+# HttpWebRequest exposes separate request and stream read/write deadlines on
+# Windows PowerShell 5.1. ReadWriteTimeout resets on successful stream I/O, so a
+# slow but advancing archive is not subject to an absolute transfer deadline.
+function Invoke-BoundedDownload {
+  param([string]$Uri, [string]$OutFile)
+  $Request = [System.Net.HttpWebRequest]::Create($Uri)
+  $Request.Timeout = $DownloadConnectTimeout * 1000
+  $Request.ReadWriteTimeout = $DownloadStallTimeout * 1000
+  $Request.AllowAutoRedirect = $true
+  $Response = $null
+  $Input = $null
+  $Output = $null
+  try {
+    $Response = $Request.GetResponse()
+    $Input = $Response.GetResponseStream()
+    $Output = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    $Buffer = New-Object byte[] 65536
+    while (($Read = $Input.Read($Buffer, 0, $Buffer.Length)) -gt 0) {
+      $Output.Write($Buffer, 0, $Read)
+    }
+  } finally {
+    if ($Output) { $Output.Dispose() }
+    if ($Input) { $Input.Dispose() }
+    if ($Response) { $Response.Dispose() }
+  }
+}
+
 $Target = Join-Path $InstallDir "monk-agent.exe"
 $ChecksumInstalled = Join-Path $InstallDir "monk-agent.sha256"
 $MonkHome = if ($env:MONK_AGENT_HOME) { $env:MONK_AGENT_HOME } else { Join-Path $HOME ".monk" }
@@ -162,12 +209,10 @@ try {
     $InstallerMutexOwned = $true
   }
 
-  # Windows PowerShell 5.1 otherwise delegates response parsing to the Internet
-  # Explorer engine, which is unavailable on Server Core and can be uninitialized
-  # on fresh desktop profiles. Downloads are files, so always use the independent
-  # basic parser (ENG-501).
+  # The bounded raw file-stream helper also avoids Windows PowerShell 5.1's
+  # Internet Explorer response parser dependency (ENG-501).
   try {
-    Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumTmp -UseBasicParsing
+    Invoke-BoundedDownload -Uri $ChecksumUrl -OutFile $ChecksumTmp
   } catch {
     # A transient failure fetching the update-check sidecar must not abort a
     # cold start when a previously-verified local binary is already installed
@@ -208,7 +253,7 @@ try {
   }
 
   Write-Host "Installing monk-agent from $Url"
-  Invoke-WebRequest -Uri $Url -OutFile $ArchiveTmp -UseBasicParsing
+  Invoke-BoundedDownload -Uri $Url -OutFile $ArchiveTmp
 
   $Actual = Get-FileSha256 $ArchiveTmp
   if ($Actual -ne $Expected) {

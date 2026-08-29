@@ -82,6 +82,10 @@ jobs:
         shell: pwsh
         run: .\tests\start-monk-agent-readiness-timeout.ps1
 
+      - name: Check Windows installer download deadlines
+        shell: pwsh
+        run: .\tests\ensure-monk-agent-download-timeout.ps1
+
       - name: Install monk-agent
         shell: pwsh
         env:
