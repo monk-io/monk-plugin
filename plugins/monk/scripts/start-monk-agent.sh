@@ -214,12 +214,14 @@ emit_signin_nudge() {
   # JSON output may render as `"signedIn": true` with a space, which the exact
   # substring match below would otherwise miss and misreport as signed-out.
   compact_body="$(printf '%s' "$body" | tr -d '[:space:]')"
+  # Treat auth status as three-state: only an explicit signedIn:false is a
+  # confirmed signed-out result. signedIn:true is signed in; empty, malformed,
+  # partial, or unrelated payloads are non-definitive and must stay quiet.
   case "$compact_body" in
     *'"signedIn":true'*) return 0 ;;
+    *'"signedIn":false'*) ;;
+    *) return 0 ;;
   esac
-  # Empty body = read error / 500 / timeout, NOT a confirmed signed-out state —
-  # suppress the nudge. Only an affirmative signedIn:false reaches the nudge below.
-  [ -n "$body" ] || return 0
   # $client is resolved once at the top of the script (Cursor-aware ordering).
   nudge_url="$base_url/plugin/nudge?type=signin&client=$client"
   if command -v curl >/dev/null 2>&1; then
