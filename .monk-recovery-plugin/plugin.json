@@ -1,0 +1,19 @@
+{
+  "name": "monk-wsl-relay-recovery",
+  "version": "0.1.0",
+  "description": "Recovery diagnostics for the Monk WSL localhost relay (127.0.0.1:2137). Detects the dead-relay state from monk-io/monk-plugin#286 (accepted) and prints the exact recovery step instead of failing silently with ECONNREFUSED.",
+  "author": "NyxSpecter4",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$PLUGIN_ROOT/monk-relay-recovery.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
