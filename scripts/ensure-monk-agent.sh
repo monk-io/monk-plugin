@@ -148,7 +148,7 @@ fi
 
 rm -rf "$extract_dir"
 mkdir -p "$extract_dir"
-tar -xzf "$archive_tmp" -C "$extract_dir"
+tar --no-same-owner -xzf "$archive_tmp" -C "$extract_dir"
 chmod 0755 "$extract_dir/monk-agent"
 mv "$extract_dir/monk-agent" "$target"
 printf '%s  %s\n' "$expected" "$artifact" >"$checksum_installed"
