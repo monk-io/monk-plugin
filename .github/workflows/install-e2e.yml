@@ -82,6 +82,12 @@ jobs:
         shell: pwsh
         run: .\tests\start-monk-agent-readiness-timeout.ps1
 
+      - name: Check Register-AntigravityMcp writes BOM-free mcp_config.json
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\tests\register-antigravity-mcp.ps1"
+          pwsh -NoProfile -ExecutionPolicy Bypass -File ".\tests\register-antigravity-mcp.ps1"
+
       - name: Install monk-agent
         shell: pwsh
         env:
