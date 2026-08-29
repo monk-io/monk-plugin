@@ -209,4 +209,50 @@ if ($Runtime) {
   Remove-MonkRuntime
 }
 
+
+# Remove the monk MCP server entry from ~/.gemini/config/mcp_config.json on
+# uninstall, restoring POSIX/PowerShell parity.
+# POSIX uninstaller calls remove_antigravity_mcp(); the PowerShell uninstaller
+# was missing this step (monk-io/monk-plugin#369). Mirrors Register-AntigravityMcp
+# in start-monk-agent.ps1.
+function Unregister-AntigravityMcp {
+  $ConfigDir = Join-Path $HOME ".gemini\config"
+  if (-not (Test-Path $ConfigDir)) { return }
+
+  $ConfigPath = Join-Path $ConfigDir "mcp_config.json"
+  if (-not (Test-Path $ConfigPath) -or (Get-Item $ConfigPath).Length -eq 0) { return }
+
+  try {
+    $Config = Get-Content -Raw $ConfigPath | ConvertFrom-Json
+  } catch {
+    Write-Warning "Could not unregister Monk MCP server because $ConfigPath is not valid JSON."
+    return
+  }
+  if ($null -eq $Config -or $Config.GetType().FullName -ne "System.Management.Automation.PSCustomObject") {
+    Write-Warning "Could not unregister Monk MCP server because $ConfigPath is not a JSON object."
+    return
+  }
+  if ($null -eq $Config.mcpServers -or $Config.mcpServers.GetType().FullName -ne "System.Management.Automation.PSCustomObject") {
+    return
+  }
+  if (-not ($Config.mcpServers.PSObject.Properties.Name -contains "monk")) {
+    return
+  }
+
+  $Config.mcpServers.PSObject.Properties.Remove("monk")
+  if ($Config.mcpServers.PSObject.Properties.Name.Count -eq 0) {
+    $Config.PSObject.Properties.Remove("mcpServers")
+  }
+
+  $TempPath = "$ConfigPath.tmp-$PID"
+  try {
+    $Config | ConvertTo-Json -Depth 100 | Set-Content -Encoding UTF8 $TempPath
+    Move-Item -Force $TempPath $ConfigPath
+  } finally {
+    Remove-Item -Force $TempPath -ErrorAction SilentlyContinue
+  }
+}
+
+Unregister-AntigravityMcp
+
 Write-Host "monk-agent uninstall complete."
