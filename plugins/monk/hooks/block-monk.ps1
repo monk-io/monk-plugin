@@ -49,10 +49,21 @@ if (Test-Path $agent) {
     $errorTask = $agentProcess.StandardError.ReadToEndAsync()
     $agentProcess.StandardInput.BaseStream.Write($hookBytes, 0, $hookBytes.Length)
     $agentProcess.StandardInput.BaseStream.Close()
-    $agentProcess.WaitForExit()
-    $agentText = $outputTask.GetAwaiter().GetResult()
-    [void]$errorTask.GetAwaiter().GetResult()
-    $agentExitCode = $agentProcess.ExitCode
+
+    # Stay inside the host hook budget. If the compiled helper wedges, kill it
+    # and fall through to the native parser instead of letting the host timeout
+    # terminate this hook before it can return a deny decision.
+    $helperFinished = $agentProcess.WaitForExit(2000)
+    if ($helperFinished) {
+      $agentText = $outputTask.GetAwaiter().GetResult()
+      [void]$errorTask.GetAwaiter().GetResult()
+      $agentExitCode = $agentProcess.ExitCode
+    } else {
+      try { $agentProcess.Kill() } catch { }
+      try { [void]$agentProcess.WaitForExit(1000) } catch { }
+      $agentText = $null
+      $agentExitCode = $null
+    }
   } catch {
     $agentText = $null
   } finally {
