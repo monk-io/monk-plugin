@@ -36,7 +36,8 @@ function Invoke-MonkLauncherEvent {
         return
       }
     }
-    Set-Content -Path $EmitMarker -Value (Get-Date -Format o) -ErrorAction SilentlyContinue
+    $EpochNow = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    Set-Content -Path $EmitMarker -Value $EpochNow -NoNewline -Encoding ASCII -ErrorAction SilentlyContinue
 
     # first_start (once-ever, distinct from the per-session dedup above): true
     # only when neither this marker NOR a managed binary exists, so installs

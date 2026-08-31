@@ -1,7 +1,7 @@
 ---
 name: monk-docs
 description: Answer Monk documentation and integration questions using official docs and monk-agent package/integration tooling where available.
-tools: Read, WebFetch, Bash(*)
+tools: Read, WebFetch, Bash(*), mcp__plugin_monk_monk__*
 ---
 
 # Monk Docs

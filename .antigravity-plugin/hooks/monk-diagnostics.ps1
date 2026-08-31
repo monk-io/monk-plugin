@@ -13,14 +13,18 @@ $ErrorActionPreference = "SilentlyContinue"
 # diagnostics twice. On Windows the .ps1 owns it: a host may spawn the .sh in an
 # interactive git-bash window whose stdin is a TTY, where the .sh can't read the
 # payload - so the .sh bows out on Windows and the .ps1 does the work here.
-if ($env:OS -ne 'Windows_NT' -and (Get-Command bash -ErrorAction SilentlyContinue)) { exit 0 }
+if ($env:OS -ne 'Windows_NT' -and (Get-Command bash -ErrorAction SilentlyContinue)) { Write-Output "{}"; exit 0 }
 
 $InstallDir = if ($env:MONK_AGENT_INSTALL_DIR) { $env:MONK_AGENT_INSTALL_DIR } else { Join-Path $HOME ".monk\bin" }
 $agent = if ($env:MONK_AGENT_PATH) { $env:MONK_AGENT_PATH } else { Join-Path $InstallDir "monk-agent.exe" }
 
-if (-not (Test-Path $agent)) { exit 0 }
+if (-not (Test-Path $agent)) { Write-Output "{}"; exit 0 }
 
 # The binary reads the payload straight from stdin (see block-monk.ps1 for why we
 # do not read it into a PowerShell string and re-pipe it).
-try { & $agent hook diagnostics --format antigravity } catch { }
+try {
+  & $agent hook diagnostics --format antigravity
+} catch {
+  Write-Output "{}"
+}
 exit 0

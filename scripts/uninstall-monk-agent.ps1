@@ -83,6 +83,11 @@ function Stop-ManagedAgent {
     }
     if (Test-SameFilePath $processPath $Target) {
       Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+      try {
+        Wait-Process -Id $process.Id -Timeout 10 -ErrorAction SilentlyContinue
+      } catch {
+        Start-Sleep -Milliseconds 500
+      }
     }
   }
   Remove-Item -Force $PidFile -ErrorAction SilentlyContinue
@@ -149,11 +154,31 @@ function Test-MonkOwnsDistro {
 
   $remoteToken = ""
   try {
-    $remoteToken = (wsl.exe -d $Distro --user root -- sh -lc "cat /etc/monk-agent.owned 2>/dev/null").Trim()
+    $remoteToken = ((wsl.exe -d $Distro --user root -- sh -lc "cat /etc/monk-agent.owned 2>/dev/null") -replace [char]0, "").Trim()
   } catch {
     return $false
   }
   return $remoteToken -and $remoteToken -eq $recordToken
+}
+
+function Remove-AntigravityMcp {
+  $ConfigDir = Join-Path $HOME ".gemini\config"
+  $ConfigFile = Join-Path $ConfigDir "mcp_config.json"
+  if (-not (Test-Path $ConfigFile)) { return }
+  try {
+    $Config = Get-Content -Raw $ConfigFile -Encoding UTF8 | ConvertFrom-Json
+    if ($Config.mcpServers -and $Config.mcpServers.PSObject.Properties["monk"]) {
+      $Config.mcpServers.PSObject.Properties.Remove("monk")
+      if ($Config.mcpServers.PSObject.Properties.Count -eq 0) {
+        $Config.PSObject.Properties.Remove("mcpServers")
+      }
+      $TempPath = "$ConfigFile.tmp-$PID"
+      $Config | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 $TempPath
+      [System.IO.File]::Copy($TempPath, $ConfigFile, $true)
+      Remove-Item -Force $TempPath -ErrorAction SilentlyContinue
+    }
+  } catch {
+  }
 }
 
 function Remove-MonkRuntime {
@@ -205,6 +230,7 @@ fi
 
 Stop-ManagedAgent
 Remove-AgentFiles
+Remove-AntigravityMcp
 if ($Runtime) {
   Remove-MonkRuntime
 }

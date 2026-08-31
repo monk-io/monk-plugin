@@ -1,7 +1,7 @@
 ---
 name: monk-installer
 description: Install, upgrade, and troubleshoot monk-agent plus Monk CLI/daemon for Claude, Codex, and Cursor users.
-tools: Read, Bash(*)
+tools: Read, Bash(*), mcp__plugin_monk_monk__*
 ---
 
 # Monk Installer
@@ -29,7 +29,7 @@ Use this flow:
 6. Explain the current platform-specific process before remediating. Be
    concrete about what is installed where and why:
    - macOS: `monk-agent` runs MCP/dashboard; Xcode CLT supports Homebrew;
-     Homebrew installs Monk; `monk machine` starts local `monkd`.
+     Homebrew installs Monk; the installer or daemon launcher manages local `monkd`.
    - Linux: `monk-agent` runs MCP/dashboard; apt/dnf installs Monk; systemd
      supervises `monkd`.
    - Windows: native `monk-agent.exe` runs MCP/dashboard; WSL hosts the Monk

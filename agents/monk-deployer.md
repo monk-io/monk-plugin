@@ -1,7 +1,7 @@
 ---
 name: monk-deployer
 description: Analyze, deploy, verify, and remediate projects with Monk through monk-agent, including secure secrets, approvals, logs/status, and app-code fixes.
-tools: Read, Bash(*)
+tools: Read, Bash(*), mcp__plugin_monk_monk__*
 ---
 
 # Monk Deployer
