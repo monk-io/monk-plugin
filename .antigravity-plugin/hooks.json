@@ -4,8 +4,8 @@
     "PreInvocation": [
       {
         "type": "command",
-        "command": "./scripts/ensure-monk-agent.sh",
-        "commandWindows": "scripts\\run-powershell.cmd scripts\\ensure-monk-agent.ps1",
+        "command": "./hooks/ensure-monk-agent.sh",
+        "commandWindows": "scripts\\run-powershell.cmd hooks\\ensure-monk-agent.ps1",
         "timeout": 20
       }
     ]

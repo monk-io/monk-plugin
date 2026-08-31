@@ -98,9 +98,7 @@ if (-not $command) { exit 0 }
 # isn't detected, nor is `find -exec monk ...` or stacked wrappers
 $normalized = $command.Replace('\', '').Replace('"', '').Replace("'", '')
 if ($normalized -match '(^|[\r\n;&|`\(\{\}\)])\s*((sudo|command|env|exec|nohup|time|nice|eval|xargs|awk|perl|python[0-9.]*|powershell(\.exe)?\s+-(Command|c)|cmd(\.exe)?\s+/c|(bash|sh|zsh)(\s+-c)?)\s+)*(timeout(\s+-[A-Za-z]+(\s+\S+)?)*\s+[0-9.]+\s+)?([A-Za-z_][A-Za-z0-9_]*=\S*\s+)*([^\s;&|`\(\)\{\}]*[\\/])?monkd?(\.(exe|cmd|bat|ps1))?([\s;&|`\(\)\{\}<>]|$)') {
-
-
-
+  @{
     hookSpecificOutput = @{
       hookEventName            = "PreToolUse"
       permissionDecision       = "deny"
