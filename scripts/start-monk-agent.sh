@@ -354,12 +354,12 @@ launchd_configured() {
   # cannot cause the per-session restart churn PATH did.
   [ -f "$launchd_plist" ] &&
     grep -Fq "<string>$agent_path</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_client_id</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_url</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_audience</string>" "$launchd_plist" &&
-    grep -q "<string>$autospin_url</string>" "$launchd_plist" &&
-    grep -q "<string>${MONK_AGENT_LOCAL:-}</string>" "$launchd_plist" &&
-    grep -q "<string>${MONK_PLUGIN_VERSION:-}</string>" "$launchd_plist"
+    grep -Fq "<string>$auth_client_id</string>" "$launchd_plist" &&
+    grep -Fq "<string>$auth_url</string>" "$launchd_plist" &&
+    grep -Fq "<string>$auth_audience</string>" "$launchd_plist" &&
+    grep -Fq "<string>$autospin_url</string>" "$launchd_plist" &&
+    grep -Fq "<string>${MONK_AGENT_LOCAL:-}</string>" "$launchd_plist" &&
+    grep -Fq "<string>${MONK_PLUGIN_VERSION:-}</string>" "$launchd_plist"
 }
 
 # The background-process (non-launchd) path has no plist to introspect, so the
@@ -374,7 +374,9 @@ background_process_configured() {
     printf '%s\n' "$state" | grep -Fxq "auth_url=$auth_url" &&
     printf '%s\n' "$state" | grep -Fxq "auth_client_id=$auth_client_id" &&
     printf '%s\n' "$state" | grep -Fxq "auth_audience=$auth_audience" &&
-    printf '%s\n' "$state" | grep -Fxq "autospin_url=$autospin_url"
+    printf '%s\n' "$state" | grep -Fxq "autospin_url=$autospin_url" &&
+    printf '%s\n' "$state" | grep -Fxq "agent_local=${MONK_AGENT_LOCAL:-}" &&
+    printf '%s\n' "$state" | grep -Fxq "plugin_version=${MONK_PLUGIN_VERSION:-}"
 }
 
 if [ "${MONK_AGENT_SKIP_ENSURE:-0}" != "1" ]; then
@@ -391,6 +393,10 @@ if [ "${MONK_AGENT_SKIP_ENSURE:-0}" != "1" ]; then
   fi
 fi
 
+xml_escape() {
+  printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g' -e "s/'/\&apos;/g"
+}
+
 start_with_launchd() {
   mkdir -p "$HOME/Library/LaunchAgents"
   cat >"$launchd_plist" <<EOF
@@ -399,15 +405,15 @@ start_with_launchd() {
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>$launchd_label</string>
+  <string>$(xml_escape "$launchd_label")</string>
   <key>ProgramArguments</key>
   <array>
-    <string>$agent_path</string>
+    <string>$(xml_escape "$agent_path")</string>
     <string>serve</string>
     <string>--host</string>
-    <string>$host</string>
+    <string>$(xml_escape "$host")</string>
     <string>--port</string>
-    <string>$port</string>
+    <string>$(xml_escape "$port")</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -428,35 +434,36 @@ start_with_launchd() {
   <key>EnvironmentVariables</key>
   <dict>
     <key>MONK_AUTH_URL</key>
-    <string>$auth_url</string>
+    <string>$(xml_escape "$auth_url")</string>
     <key>MONK_AGENT_AUTH_CLIENT_ID</key>
-    <string>$auth_client_id</string>
+    <string>$(xml_escape "$auth_client_id")</string>
     <key>MONK_AUTH_AUDIENCE</key>
-    <string>$auth_audience</string>
+    <string>$(xml_escape "$auth_audience")</string>
     <key>MONK_AUTOSPIN_URL</key>
-    <string>$autospin_url</string>
+    <string>$(xml_escape "$autospin_url")</string>
     <key>MONK_AGENT_LOCAL</key>
-    <string>${MONK_AGENT_LOCAL:-}</string>
+    <string>$(xml_escape "${MONK_AGENT_LOCAL:-}")</string>
     <key>MONK_PLUGIN_VERSION</key>
-    <string>${MONK_PLUGIN_VERSION:-}</string>
+    <string>$(xml_escape "${MONK_PLUGIN_VERSION:-}")</string>
     <!-- Deliberately NOT gated in launchd_configured(): the launching client
          legitimately differs per session, and gating a restart on it would
          reintroduce the per-session churn the PATH exclusion comment warns
          about. On macOS this reflects the client of the last real (re)start. -->
     <key>MONK_AGENT_LAUNCH_CLIENT</key>
-    <string>$client</string>
+    <string>$(xml_escape "$client")</string>
     <key>PATH</key>
-    <string>$agent_path_env</string>
+    <string>$(xml_escape "$agent_path_env")</string>
   </dict>
   <key>StandardOutPath</key>
-  <string>$log_file</string>
+  <string>$(xml_escape "$log_file")</string>
   <key>StandardErrorPath</key>
-  <string>$log_file</string>
+  <string>$(xml_escape "$log_file")</string>
 </dict>
 </plist>
 EOF
 
   uid="$(id -u)"
+  rm -f "$pid_file"
   launchctl bootout "gui/$uid/$launchd_label" >/dev/null 2>&1 || true
   sleep 1
   launchctl bootstrap "gui/$uid" "$launchd_plist"
@@ -503,6 +510,8 @@ start_with_background_process() {
     printf 'auth_client_id=%s\n' "$auth_client_id"
     printf 'auth_audience=%s\n' "$auth_audience"
     printf 'autospin_url=%s\n' "$autospin_url"
+    printf 'agent_local=%s\n' "${MONK_AGENT_LOCAL:-}"
+    printf 'plugin_version=%s\n' "${MONK_PLUGIN_VERSION:-}"
   } >"$state_file"
 }
 

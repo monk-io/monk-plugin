@@ -1,7 +1,7 @@
 ---
 name: monk-frontman
 description: General Monk operator for portable AI hosts. Route install, auth, deploy, docs, and editor work through monk-agent while keeping the user informed.
-tools: Read, Bash(*)
+tools: Read, Bash(*), mcp__plugin_monk_monk__*
 ---
 
 # Monk Frontman

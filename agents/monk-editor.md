@@ -249,9 +249,9 @@ anything beyond a plain prefix route.
 If ingress is unavailable at deploy time (the plugin failed to enable or is
 still syncing on a fresh cluster), KEEP the `ingress-routes` configuration and
 report the problem in your summary — never rewrite a web-facing service to
-plain `ports` as a workaround. Re-enabling the plugin later (`monk plugins
-enable ingress`) picks up the declared routes without any template changes,
-while a ports rewrite strands the app on a firewalled IP:port.
+plain `ports` as a workaround. Re-enabling the plugin later through cluster
+ingress tooling (or via monk-deployer) picks up the declared routes without any
+template changes, while a ports rewrite strands the app on a firewalled IP:port.
 
 ### Persistent storage (volumes)
 
