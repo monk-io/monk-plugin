@@ -55,10 +55,20 @@ trap cleanup EXIT
 # rather than fail -- per-PID scratch paths below still keep each invocation's
 # download/extract isolated even without the lock.
 if command -v flock >/dev/null 2>&1; then
+  install_lock_timeout="${MONK_AGENT_INSTALL_LOCK_TIMEOUT:-60}"
+  case "$install_lock_timeout" in
+    ''|*[!0-9]*)
+      echo "MONK_AGENT_INSTALL_LOCK_TIMEOUT must be a non-negative integer." >&2
+      exit 2
+      ;;
+  esac
   exec 3>"$lock_file"
   if ! flock -n 3; then
-    echo "Another monk-agent install is in progress; waiting..." >&2
-    flock 3
+    echo "Another monk-agent install is in progress; waiting up to ${install_lock_timeout}s..." >&2
+    if ! flock -w "$install_lock_timeout" 3; then
+      echo "Timed out after ${install_lock_timeout}s waiting for another monk-agent install." >&2
+      exit 1
+    fi
   fi
 fi
 

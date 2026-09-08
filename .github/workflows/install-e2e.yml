@@ -81,6 +81,10 @@ jobs:
         shell: bash
         run: ./tests/start-monk-agent-fastpath.sh
 
+      - name: Check installer lock deadline
+        shell: bash
+        run: ./tests/ensure-monk-agent-lock-timeout.sh
+
       - name: Check custom agent path handoff
         shell: bash
         run: ./tests/start-monk-agent-path-handoff.sh

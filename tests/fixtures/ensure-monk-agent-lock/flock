@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""Small cross-platform flock(1) fixture for installer lock tests."""
+
+import fcntl
+import os
+import pathlib
+import sys
+import time
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    nonblocking = False
+    timeout = None
+
+    if args and args[0] == "-n":
+        nonblocking = True
+        args = args[1:]
+    elif args and args[0] == "-w":
+        if len(args) < 3:
+            return 2
+        timeout = float(args[1])
+        args = args[2:]
+
+    if len(args) != 1:
+        return 2
+
+    fd = int(args[0])
+    wait_started = os.environ.get("MONK_TEST_FLOCK_WAIT_STARTED")
+    if timeout is not None and wait_started:
+        pathlib.Path(wait_started).touch()
+
+    if not nonblocking and timeout is None:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        return 0
+
+    deadline = time.monotonic() + (timeout or 0)
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return 0
+        except BlockingIOError:
+            if nonblocking or time.monotonic() >= deadline:
+                return 1
+            time.sleep(0.02)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
