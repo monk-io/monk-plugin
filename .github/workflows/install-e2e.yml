@@ -93,6 +93,10 @@ jobs:
         shell: bash
         run: ./tests/start-monk-agent-antigravity-python-path.sh
 
+      - name: Check cluster.delete selected-cluster skill guard
+        shell: bash
+        run: ./tests/cluster-delete-selected-guard.sh
+
   windows:
     name: windows-latest
     runs-on: windows-latest

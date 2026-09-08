@@ -123,7 +123,10 @@ Blocked shell work:
   `monk.cluster.peer.remove` and
   `monk.cluster.peer.tag` for node management, `monk.cluster.exit` for
   returning to local mode, and `monk.cluster.delete` only for explicit
-  infrastructure destruction.
+  infrastructure destruction. `monk.cluster.delete` always destroys the
+  currently selected cluster; never pass `clusterName` or `clusterId`
+  (ignored — the selected cluster is still deleted). List/switch first; if
+  the named cluster is not in the list, do not call delete.
 - After `monk.cluster.create` succeeds, continue against the newly selected
   cluster unless the user asks to switch or exit. Use
   `monk://workspace/clusters` or `monk.cluster.list` to see saved choices.

@@ -16,6 +16,10 @@ needed.
   through `monk-agent`.
 - Cluster creation, grow, peer removal, peer retagging, registry changes, exit, and delete must go
   through `monk.cluster.*` tools.
+- `monk.cluster.delete` always destroys the currently selected cluster. Never
+  pass `clusterName` or `clusterId` (ignored; the selected cluster is still
+  deleted). List/switch first; if the named cluster is not in the list, do not
+  call delete. Use `monk.cluster.exit` to leave a cluster without destroying it.
 - Never target Monk-managed `system/*` workloads.
 - Never call the dashboard's session/approval endpoints to approve or sign in on the user's behalf.
   Opening the link for them to decide is fine; deciding for them is not.

@@ -134,6 +134,10 @@ with no local build), skip this section and continue from step 5 above.
   with the SAME parameters to resume finalization on the existing nodes —
   never retry under a new name (it orphans the paid nodes). To abandon the
   failed cluster, `monk.cluster.switch` to it and `monk.cluster.delete`.
+  `monk.cluster.delete` always destroys the currently selected cluster. Never
+  pass `clusterName` or `clusterId` (ignored; the selected cluster is still
+  deleted). If the named cluster is not in `monk.cluster.list`, do not call
+  delete.
 - `monk.cluster.create` automatically selects the newly created cluster on
   success. Subsequent Monk RPC/tools/commands should operate in that selected
   context unless the user asks to switch or exit.
@@ -162,7 +166,8 @@ with no local build), skip this section and continue from step 5 above.
   changes, or when deployment remediation clearly requires it.
 - Use `monk.cluster.exit` to return operations to local runtime without
   deleting cloud infrastructure. Use `monk.cluster.delete` only when the user
-  explicitly wants to destroy the current cluster.
+  explicitly wants to destroy the currently selected cluster — switch to it
+  first, never pass `clusterName`/`clusterId`.
 - These tools own approval prompts. Call the relevant tool and let
   `monk-agent` open the feed; do not ask for a separate approval first.
 - If a cluster operation times out or the approval state is unclear, inspect

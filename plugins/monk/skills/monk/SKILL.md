@@ -149,7 +149,7 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.cluster.peer.set_certificate`
 - `monk.cluster.peer.reset_certificate`
 - `monk.cluster.upgrade`
-- `monk.cluster.delete`
+- `monk.cluster.delete` (always the currently selected cluster; no name param — never pass clusterName)
 - `monk.cluster.exit`
 - `monk.cluster.provider.ensure`
 - `monk.cluster.price`
@@ -356,6 +356,17 @@ open the required approval flow when needed.
   that orphans the paid nodes and the new create can fail on leftover state.
   To abandon the failed cluster instead, `monk.cluster.switch` to it and
   destroy it with `monk.cluster.delete`.
+- `monk.cluster.delete` always destroys the currently selected cluster. It
+  declares no `clusterName` / `clusterId` parameter; those extra properties
+  are accepted and silently ignored, so passing a name does not select that
+  cluster — the selected cluster is still destroyed. Before calling it, list
+  saved clusters (`monk.cluster.list` or `monk://workspace/clusters`) and
+  confirm the selected name is the user's target. If it is not, switch with
+  `monk.cluster.switch` and re-check. If the named cluster is not in the list,
+  do not call delete. Call `monk.cluster.delete` with no name or id, and
+  confirm the approval title names the intended cluster. Use
+  `monk.cluster.exit` to leave a cluster without destroying it. Never pass
+  `clusterName` or `clusterId`.
 - If the user asks to reset or clear Monk Agent local state, use
   `monk.agent.clear_state`. It blocks on a dashboard approval before deleting
   anything — local events, prompts, actions, credentials, stored auth tokens,
