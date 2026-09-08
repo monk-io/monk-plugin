@@ -20,7 +20,57 @@ $agent = if ($env:MONK_AGENT_PATH) { $env:MONK_AGENT_PATH } else { Join-Path $In
 
 if (-not (Test-Path $agent)) { exit 0 }
 
-# The binary reads the payload straight from stdin (see block-monk.ps1 for why we
-# do not read it into a PowerShell string and re-pipe it).
-try { & $agent hook diagnostics --format antigravity } catch { }
+# Buffer stdin as bytes up front and write it to the child's own redirected
+# stdin, rather than leaving standard handles un-redirected and relying on
+# implicit inheritance. That was tried first (to keep the payload byte-exact
+# per block-monk.ps1's comment on re-piping) but a System.Diagnostics.Process
+# with no RedirectStandardInput does not reliably inherit a *piped* parent
+# stdin on Windows -- every real host pipes the hook payload in, so the
+# child's stdin read never saw EOF and hung until the watchdog below killed
+# it, silently discarding the diagnostics on every single invocation
+# (ENG-641/681/708 follow-up incident, 2026-09-02). Buffering up front and
+# writing+closing the child's own stdin stream sidesteps that gap entirely.
+$inputStream = [Console]::OpenStandardInput()
+$inputBuffer = New-Object byte[] 4096
+$payloadStream = New-Object System.IO.MemoryStream
+while (($bytesRead = $inputStream.Read($inputBuffer, 0, $inputBuffer.Length)) -gt 0) {
+  $payloadStream.Write($inputBuffer, 0, $bytesRead)
+}
+$hookBytes = $payloadStream.ToArray()
+$payloadStream.Dispose()
+
+$startInfo = New-Object System.Diagnostics.ProcessStartInfo
+$startInfo.FileName = $agent
+$startInfo.Arguments = "hook diagnostics --format antigravity"
+$startInfo.UseShellExecute = $false
+$startInfo.RedirectStandardInput = $true
+$startInfo.CreateNoWindow = $true
+
+$agentProcess = $null
+try {
+  $agentProcess = New-Object System.Diagnostics.Process
+  $agentProcess.StartInfo = $startInfo
+  [void]$agentProcess.Start()
+  $agentProcess.StandardInput.BaseStream.Write($hookBytes, 0, $hookBytes.Length)
+  $agentProcess.StandardInput.BaseStream.Close()
+  # A wedged (not merely failing) helper must not block the edit indefinitely:
+  # bound the wait and kill it on timeout. Unlike block-monk's 2s default
+  # (which must stay well under every host's tight 5s PreToolUse budget),
+  # this hook's host budget is a generous 30s and the analyzer call itself
+  # can legitimately take several seconds on a cold/first-request agent -- an
+  # aggressive bound here was confirmed live (2026-09-02 e2e-smoke) to
+  # truncate real, still-in-flight analyzer responses before they ever came
+  # back, so a working call was silently discarded exactly like a genuinely
+  # wedged one. 20s leaves the watchdog's own kill overhead safely inside the
+  # 30s budget while giving a slow-but-healthy call real room to finish. PS
+  # 5.1's Process class has no tree-kill overload, so this only reaches the
+  # helper itself.
+  $timeoutMs = if ($env:MONK_AGENT_HOOK_TIMEOUT_MS) { [int]$env:MONK_AGENT_HOOK_TIMEOUT_MS } else { 20000 }
+  if (-not $agentProcess.WaitForExit($timeoutMs)) {
+    try { $agentProcess.Kill() } catch {}
+  }
+} catch {
+} finally {
+  if ($agentProcess) { $agentProcess.Dispose() }
+}
 exit 0

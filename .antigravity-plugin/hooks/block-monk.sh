@@ -24,10 +24,27 @@ if [ -t 0 ]; then exit 0; fi
 input="$(cat)"
 
 agent="${MONK_AGENT_PATH:-${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent}"
+# A wedged (not merely failing) helper must not block PreToolUse for the whole
+# host budget: background it under a watchdog that TERMs then KILLs it after
+# MONK_AGENT_HOOK_TIMEOUT_MS (default 2s), so the fallback parser below still
+# gets a chance to run and finish inside the host's own PreToolUse budget for
+# this hook (every host sets it to 5s) instead of losing the race to the
+# host's own external kill -- which fails OPEN (allows the command) exactly
+# like an unpatched wedged helper would (ENG-641/681/708 incident, 2026-09-02).
+timeout_ms="${MONK_AGENT_HOOK_TIMEOUT_MS:-2000}"
+timeout_s=$(((timeout_ms + 999) / 1000))
 if [ -x "$agent" ]; then
-  if printf '%s' "$input" | "$agent" hook block-monk --format antigravity; then
+  printf '%s' "$input" | "$agent" hook block-monk --format antigravity &
+  helper_pid=$!
+  (sleep "$timeout_s"; kill -TERM "$helper_pid" 2>/dev/null; sleep 1; kill -KILL "$helper_pid" 2>/dev/null) &
+  watchdog_pid=$!
+  if wait "$helper_pid" 2>/dev/null; then
+    kill "$watchdog_pid" 2>/dev/null || true
+    wait "$watchdog_pid" 2>/dev/null || true
     exit 0
   fi
+  kill "$watchdog_pid" 2>/dev/null || true
+  wait "$watchdog_pid" 2>/dev/null || true
 fi
 
 # Fallback: binary unavailable. No jq here, so pull just the `CommandLine`

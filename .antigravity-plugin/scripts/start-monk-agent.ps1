@@ -282,6 +282,23 @@ function Test-SameFilePath {
   }
 }
 
+function Get-RecordedAgentPath {
+  param([string]$FallbackPath)
+  if (-not (Test-Path $StateFile)) {
+    return $FallbackPath
+  }
+  $State = Get-Content -Raw $StateFile -ErrorAction SilentlyContinue
+  foreach ($Line in ($State -split "`r?`n")) {
+    if ($Line.StartsWith("agent_path=", [StringComparison]::Ordinal)) {
+      $RecordedPath = $Line.Substring("agent_path=".Length)
+      if ($RecordedPath) {
+        return $RecordedPath
+      }
+    }
+  }
+  return $FallbackPath
+}
+
 function Stop-ManagedAgent {
   if (-not (Test-Path $PidFile)) {
     return
@@ -313,7 +330,11 @@ function Stop-ManagedAgent {
     $ProcessPath = ""
   }
 
-  if (Test-SameFilePath $ProcessPath $AgentPath) {
+  # The recorded PID belongs to the executable from the previous launch. When
+  # MONK_AGENT_PATH changes from A to B, validate ownership against A so it can
+  # be stopped before B is started.
+  $ExpectedProcessPath = Get-RecordedAgentPath $AgentPath
+  if (Test-SameFilePath $ProcessPath $ExpectedProcessPath) {
     Stop-Process -Id $OldProcess.Id -Force -ErrorAction SilentlyContinue
     try {
       Wait-Process -Id $OldProcess.Id -Timeout 10 -ErrorAction SilentlyContinue

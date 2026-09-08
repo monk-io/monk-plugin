@@ -49,10 +49,22 @@ if (Test-Path $agent) {
     $errorTask = $agentProcess.StandardError.ReadToEndAsync()
     $agentProcess.StandardInput.BaseStream.Write($hookBytes, 0, $hookBytes.Length)
     $agentProcess.StandardInput.BaseStream.Close()
-    $agentProcess.WaitForExit()
-    $agentText = $outputTask.GetAwaiter().GetResult()
-    [void]$errorTask.GetAwaiter().GetResult()
-    $agentExitCode = $agentProcess.ExitCode
+    # A wedged (not merely failing) helper must not block the host's PreToolUse
+    # wait indefinitely: bound the wait and kill the helper on timeout so the
+    # native fallback parser below still gets a chance to run and finish
+    # inside the host's own PreToolUse budget for this hook (every host sets
+    # it to 5s) instead of losing the race to the host's own external kill --
+    # which fails OPEN (allows the command) exactly like an unpatched wedged
+    # helper would (ENG-641/681/708 incident, 2026-09-02). PS 5.1's Process
+    # class has no tree-kill overload, so this only reaches the helper itself.
+    $timeoutMs = if ($env:MONK_AGENT_HOOK_TIMEOUT_MS) { [int]$env:MONK_AGENT_HOOK_TIMEOUT_MS } else { 2000 }
+    if ($agentProcess.WaitForExit($timeoutMs)) {
+      $agentText = $outputTask.GetAwaiter().GetResult()
+      [void]$errorTask.GetAwaiter().GetResult()
+      $agentExitCode = $agentProcess.ExitCode
+    } else {
+      try { $agentProcess.Kill() } catch {}
+    }
   } catch {
     $agentText = $null
   } finally {

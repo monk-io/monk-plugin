@@ -8,6 +8,16 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      channel:
+        description: "Agent channel to install ('stable' or 'nightly'). Defaults to the ref-derived channel. Pin 'stable' to reproduce a release-tag run from a branch."
+        required: false
+        type: choice
+        options:
+          - default
+          - stable
+          - nightly
+        default: default
 
 permissions:
   contents: read
@@ -32,8 +42,17 @@ jobs:
         env:
           MONK_AGENT_INSTALL_DIR: ${{ runner.temp }}/monk-bin
           MONK_AGENT_CHANNEL: ${{ startsWith(github.ref, 'refs/tags/v') && 'stable' || 'nightly' }}
+          # Manual-dispatch override, applied in-shell below. Deliberately NOT
+          # folded into the expression above: that line runs on every release tag,
+          # and keeping it untouched means a dispatch-only knob cannot change what
+          # a release installs. Empty on push/pull_request/tag.
+          CHANNEL_OVERRIDE: ${{ github.event.inputs.channel }}
         run: |
           set -euo pipefail
+          if [ -n "${CHANNEL_OVERRIDE:-}" ] && [ "$CHANNEL_OVERRIDE" != "default" ]; then
+            export MONK_AGENT_CHANNEL="$CHANNEL_OVERRIDE"
+          fi
+          echo "installing monk-agent from channel: $MONK_AGENT_CHANNEL"
           installed="$(./scripts/ensure-monk-agent.sh)"
           test "$installed" = "$MONK_AGENT_INSTALL_DIR/monk-agent"
           test -x "$installed"
@@ -43,7 +62,6 @@ jobs:
         env:
           MONK_AGENT_HOME: ${{ runner.temp }}/monk-home
           MONK_AGENT_DEV: "1"
-          MONK_AGENT_SIMULATE_AUTH: "1"
           MONK_AGENT_MOCK_RUNTIME: "1"
           MONK_AGENT_VAULT_BACKEND: file
           MONK_AGENT_STORE: file
@@ -52,7 +70,12 @@ jobs:
           set -euo pipefail
           "$RUNNER_TEMP/monk-bin/monk-agent" status | tee "$RUNNER_TEMP/status.json"
           grep '"version"' "$RUNNER_TEMP/status.json"
-          grep '"signedIn": true' "$RUNNER_TEMP/status.json"
+          # This job installs a *released* binary, where the dev-only
+          # MONK_AGENT_SIMULATE_AUTH hatch is compiled out (see src/build_flags.ts),
+          # so a signed-in state is unreachable here. Assert the auth block renders;
+          # the signed-in path is covered by monk-agent's e2e-smoke, which does a
+          # real Auth0 login against a dev-build binary.
+          grep '"signedIn"' "$RUNNER_TEMP/status.json"
 
       - name: Check launcher fast-path reuse/restart
         shell: bash
@@ -61,6 +84,10 @@ jobs:
       - name: Check installer lock deadline
         shell: bash
         run: ./tests/ensure-monk-agent-lock-timeout.sh
+
+      - name: Check custom agent path handoff
+        shell: bash
+        run: ./tests/start-monk-agent-path-handoff.sh
 
       - name: Check launcher readiness deadline
         shell: bash
@@ -86,12 +113,23 @@ jobs:
         shell: pwsh
         run: .\tests\start-monk-agent-readiness-timeout.ps1
 
+      - name: Check custom agent path handoff
+        shell: pwsh
+        run: .\tests\start-monk-agent-path-handoff.ps1
+
       - name: Install monk-agent
         shell: pwsh
         env:
           MONK_AGENT_INSTALL_DIR: ${{ runner.temp }}\monk-bin
           MONK_AGENT_CHANNEL: ${{ startsWith(github.ref, 'refs/tags/v') && 'stable' || 'nightly' }}
+          # See the unix job — dispatch-only override, kept out of the expression
+          # above so the release-tag path is untouched.
+          CHANNEL_OVERRIDE: ${{ github.event.inputs.channel }}
         run: |
+          if ($env:CHANNEL_OVERRIDE -and $env:CHANNEL_OVERRIDE -ne "default") {
+            $env:MONK_AGENT_CHANNEL = $env:CHANNEL_OVERRIDE
+          }
+          Write-Host "installing monk-agent from channel: $env:MONK_AGENT_CHANNEL"
           $installed = .\scripts\ensure-monk-agent.ps1
           if ($installed -ne "$env:MONK_AGENT_INSTALL_DIR\monk-agent.exe") {
             throw "unexpected install path: $installed"
@@ -105,7 +143,6 @@ jobs:
         env:
           MONK_AGENT_HOME: ${{ runner.temp }}\monk-home
           MONK_AGENT_DEV: "1"
-          MONK_AGENT_SIMULATE_AUTH: "1"
           MONK_AGENT_MOCK_RUNTIME: "1"
           MONK_AGENT_VAULT_BACKEND: file
           MONK_AGENT_STORE: file
@@ -122,8 +159,13 @@ jobs:
           if (-not $status.version) {
             throw "missing version in monk-agent status"
           }
-          if (-not $status.auth.signedIn) {
-            throw "expected simulated auth to be signed in"
+          # This job installs a *released* binary, where the dev-only
+          # MONK_AGENT_SIMULATE_AUTH hatch is compiled out (see src/build_flags.ts),
+          # so a signed-in state is unreachable here. Assert the auth block renders;
+          # the signed-in path is covered by monk-agent's e2e-smoke, which does a
+          # real Auth0 login against a dev-build binary.
+          if ($null -eq $status.auth -or $null -eq $status.auth.signedIn) {
+            throw "missing auth.signedIn in monk-agent status"
           }
 
       - name: Start monk-agent
@@ -132,7 +174,6 @@ jobs:
           MONK_AGENT_INSTALL_DIR: ${{ runner.temp }}\monk-bin
           MONK_AGENT_HOME: ${{ runner.temp }}\monk-start-home
           MONK_AGENT_DEV: "1"
-          MONK_AGENT_SIMULATE_AUTH: "1"
           MONK_AGENT_MOCK_RUNTIME: "1"
           MONK_AGENT_VAULT_BACKEND: file
           MONK_AGENT_STORE: file

@@ -87,6 +87,7 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.project.analyze`
 - `monk.project.configure`
 - `monk.project.deploy`
+- `monk.project.plan`
 - `monk.environment.list`
 - `monk.environment.select`
 - `monk.environment.delete`
@@ -364,6 +365,16 @@ Secrets have three distinct roles:
   usually by obtaining the secret reference from a connection target or entity
   state, then passing that reference to `secret(...)` where the package schema
   expects it.
+- Provider-backed entities (MongoDB Atlas, Netlify, Vercel, Neon, Stripe,
+  Cloudflare, Redis Cloud, DigitalOcean Spaces) read their API credential from
+  a `secret_ref`-style property. Use the provider's canonical secret name there
+  and in MANIFEST `SECRET` (`default-mongodb-token`, `default-netlify-pat`,
+  `default-vercel-token`, `neon-api-key`, `stripe-secret-key`,
+  `cloudflare-api-token`, `default-redis-cloud-account-key` +
+  `default-redis-cloud-user-key`, `do-spaces-access-key` +
+  `do-spaces-secret-key`). Monk fills these from the stored provider credential,
+  including one-click sign-in, so `monk.credentials.request` shows the provider
+  section instead of a field to paste the value into.
 - Permission is explicit. Any runnable or entity that reads a secret must allow
   that secret through `permitted-secrets` or the package-specific equivalent.
   Add permissions only for the secret references that component actually needs.

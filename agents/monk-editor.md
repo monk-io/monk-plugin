@@ -326,6 +326,26 @@ both permitted and sourced:
   permitted on every consuming runnable/entity, but MUST NOT be listed in
   MANIFEST `SECRET` and MUST NOT be requested from the user. The producing
   entity is its source.
+- **Provider-backed entities** (MongoDB Atlas, Netlify, Vercel, Neon, Stripe,
+  Cloudflare, Redis Cloud, DigitalOcean Spaces) read their API credential from
+  a `secret_ref`-style property. The name you put there is **arbitrary** — it
+  does not need to match any particular string — list that same name in
+  MANIFEST `SECRET` and monk-agent resolves its value from the stored provider
+  credential (including one-click sign-in), so the user is never asked to
+  paste it. Resolution is keyed by the entity's namespace and the `secret_ref`
+  property, not by the name's text, so `atlas-creds`, `mongodb-atlas-token`,
+  or `default-mongodb-token` all work identically for a `mongodb-atlas/*`
+  entity (same idea for `default-netlify-pat`, `default-vercel-token`,
+  `neon-api-key`, `stripe-secret-key`, `cloudflare-api-token`,
+  `default-redis-cloud-account-key` + `default-redis-cloud-user-key`,
+  `do-spaces-access-key` + `do-spaces-secret-key` — those are just this
+  codebase's own conventional choices, not requirements). This only works
+  through a literal `secret_ref` string, so it breaks if that property becomes
+  an expression. **Never** set `secret_ref` to an internal provider-credential
+  key such as `provider:mongodb_atlas` — that string is monk-agent's own vault
+  key for the stored credential blob, not a name any entity can read, and
+  using it either injects the wrong raw value or fails with a generic
+  "not found" error.
 
 - MANIFEST `SECRET` lists only values required from the user, such as API keys,
   SaaS tokens, or application-specific secrets.

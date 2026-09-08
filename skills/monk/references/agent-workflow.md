@@ -58,6 +58,17 @@ automatically selects the created cluster on success. Use
 `monk.cluster.switch` to select one logically, and `monk.cluster.exit` to clear
 selection and return to local mode without deleting infrastructure.
 
+In local mode (nothing selected yet), `monk.cluster.status` reports a
+`liveCluster` field when `monkd` is already connected to a cluster that isn't
+in this workspace's saved list — created via the CLI, or before the plugin
+was installed. `monk.cluster.list` alone won't show it. When you see it,
+offer the user `monk.cluster.bind` (defaults to this workspace's own bound
+org/project if it has one, personal otherwise; pass `orgSlug` to target a
+different org) or `monk.cluster.switch` by that cluster's name to adopt it —
+both trigger a dashboard approval before registering it, since its identity
+is self-reported by the daemon and cannot be verified against the platform.
+Do not register it silently or assume the user wants it adopted.
+
 For workload lifecycle cleanup, use `monk.workload.status` to inspect first,
 then `monk.workload.stop`, `monk.workload.delete`/`purge`, or
 `monk.workload.unload`. `stop` preserves runnable state; `delete`/`purge`
