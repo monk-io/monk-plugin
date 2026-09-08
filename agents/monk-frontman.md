@@ -164,7 +164,8 @@ Blocked shell work:
 - Deploy-time provider and MANIFEST credentials are collected through
   `monk.credentials.request`; never ask the user to paste values in chat. Use
   `monk.secret.request` only for a single ad hoc secret with no provider
-  mapping.
+  mapping. Never call `monk.secret.push` with `names: []` — an empty `names`
+  array pushes the entire local vault, not nothing.
 - MANIFEST `SECRET` entries are only for values the user must provide. Some
   packages and entities write generated secrets to named references, such as
   database passwords; consumers should read those references through

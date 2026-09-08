@@ -27,6 +27,10 @@ Never ask the user to paste secrets into chat.
 - For deploy-time provider or MANIFEST credentials, use `monk.credentials.request` so the user gets
   one typed feed form for all required values.
 - Use `monk.secret.request` only for a single ad hoc secret with no known provider mapping.
+- Never call `monk.secret.push` with `names: []` — an empty `names` array pushes
+  the entire local vault to the cluster, not nothing. Pass an explicit non-empty
+  `names` list, or omit `names` only after telling the user that every local
+  secret will be pushed.
 - Secrets, tokens, auth state, authorization codes, and raw secret values must never be sent in
   telemetry or included in tool arguments beyond the dedicated secret tools.
 

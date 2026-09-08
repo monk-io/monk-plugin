@@ -93,6 +93,10 @@ jobs:
         shell: bash
         run: ./tests/start-monk-agent-antigravity-python-path.sh
 
+      - name: Check secret.push empty-names skill guard
+        shell: bash
+        run: ./tests/secret-push-empty-names-guard.sh
+
   windows:
     name: windows-latest
     runs-on: windows-latest

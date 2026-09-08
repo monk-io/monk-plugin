@@ -178,7 +178,7 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.secret.list`
 - `monk.secret.add`
 - `monk.secret.remove`
-- `monk.secret.push`
+- `monk.secret.push` (never pass `names: []` — that pushes the entire local vault)
 - `monk.credentials.request`
 - `monk.credentials.status`
 - `monk.credentials.delete`
@@ -310,6 +310,12 @@ open the required approval flow when needed.
   MANIFEST credentials, use `monk.credentials.request` so the user gets one
   typed feed form for all required values. Use `monk.secret.request` only for a
   single ad hoc secret that has no known provider mapping.
+- `monk.secret.push` with `names: []` is not a no-op: an empty `names` array
+  pushes every secret in the local vault to the cluster, same as omitting
+  `names`. Never pass `names: []`. Call `monk.secret.push` only with an
+  explicit non-empty `names` list, or omit `names` after telling the user
+  that every local secret will be pushed. Confirm the approval title (it
+  includes the count) before they approve.
 - Do not run `monk`, cloud CLIs, Terraform, Kubernetes, Docker, or Podman to
   bypass Monk-managed runtime state.
 - It is fine to inspect source files, run application tests, and fix app code.
@@ -461,6 +467,10 @@ When planning credentials, derive the minimal request list from the verified
 package plan and current secret status. Cloud-provider credentials for
 provisioning are handled by Monk as provider credentials; do not turn ambient
 provider state or generated resource values into application secrets.
+
+Pushing local vault secrets onto a cluster uses `monk.secret.push`. Omit
+`names` only when the user asked to push everything. Never pass `names: []`
+— an empty `names` array pushes the entire local vault, not nothing.
 
 ## Deployment flow
 
