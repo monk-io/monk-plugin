@@ -201,8 +201,13 @@ When deployment fails:
 After deploy:
 
 - Read `monk.workload.status` and `monk://workspace/workloads`.
-- Verify returned endpoints with browser or HTTP checks when available.
-- Report endpoint URLs, workload health, and any remaining unverified pieces.
+- Do not assume `monk.project.deploy` returned a URL — it often has no URL,
+  even when a host-port is bound. Derive the local URL from `Ports` /
+  `PublicPorts` (`http://127.0.0.1:<host-port>`) and verify with HTTP/browser.
+- If `Ports`/`PublicPorts` are null, a web service with only `ingress-routes`
+  (no `host-port`) is not reachable on the host. Do not report it live; add
+  `host-port` for local mode or ensure ingress is actually serving.
+- Report the derived URL, workload health, and any remaining unverified pieces.
 
 Do not run `monk`, cloud CLIs, Terraform, Kubernetes, Docker, or Podman to
 operate Monk-managed infrastructure. Source-code fixes and tests are allowed

@@ -215,11 +215,18 @@ new clusters. Plain `ports`/`host-port` publishing leaves the service on a bare
 IP:port (typically firewalled, no HTTPS, no domain); use it only for local
 mode, internal services, or overlay-network connections.
 
+For **local mode**, web-facing services need `host-port`. `ingress-routes`
+without `host-port` deploys successfully but binds nothing on the host — the
+app is unreachable, and `project.deploy` still reports success with no URL.
+Always set `host-port` on local web services. `ingress-routes` without
+`host-port` is cluster-only.
+
 `ingress-routes` is a MAP of named routes declared on a service inside the
 runnable's `services:` map (alongside that service's `container`/`port`/
-`protocol`); the service keeps its internal `port` and needs no `host-port`. It
-is never a top-level key on the runnable, and never a YAML list — each route is a
-named map entry (e.g. `web:`), not a `- path:`/`port:` list item:
+`protocol`). On a cluster, the service keeps its internal `port` and needs no
+`host-port`. It is never a top-level key on the runnable, and never a YAML list
+— each route is a named map entry (e.g. `web:`), not a `- path:`/`port:` list
+item:
 
 ```yaml
 services:

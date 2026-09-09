@@ -93,6 +93,10 @@ jobs:
         shell: bash
         run: ./tests/start-monk-agent-antigravity-python-path.sh
 
+      - name: Check local-deploy URL skill guard
+        shell: bash
+        run: ./tests/local-deploy-surface-url-guard.sh
+
   windows:
     name: windows-latest
     runs-on: windows-latest

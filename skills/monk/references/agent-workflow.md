@@ -36,7 +36,12 @@ take with Monk, check official docs at `docs.monk.io` and use
     hoc secret with no provider mapping.
 11. Deploy with `monk.project.deploy`; privileged tools open their own approval
     flow when needed.
-12. Verify the app or workload externally.
+12. Verify the app or workload externally. `monk.project.deploy` often has no URL
+    in the result. After a local deploy, read `monk.workload.status`
+    `Ports`/`PublicPorts` and check `http://127.0.0.1:<host-port>`. If those
+    fields are null, `ingress-routes` without `host-port` left the app
+    unreachable on the host — add `host-port` (local) or ensure ingress is
+    actually serving before claiming done.
 
 For cluster work, first resolve scope: call `monk.scope.status` and, if the
 workspace is `unbound` or `ambiguous`, bind it to an owner/project with

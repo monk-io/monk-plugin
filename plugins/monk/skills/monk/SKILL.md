@@ -489,7 +489,20 @@ For a first deploy:
    through the local secure web form.
 7. If deploying to cloud or making a risky change, request approval.
 8. Deploy with `monk.project.deploy`.
-9. Verify the returned endpoint/status from outside the deploy operation.
+9. Verify the app from outside the deploy operation. `monk.project.deploy`
+   often reports success with **no URL in the result**, even when a host-port
+   is bound. After a local deploy:
+   - Read `monk.workload.status` / `monk://workspace/workloads` and use
+     `Ports` / `PublicPorts`.
+   - If a host-port is listed (e.g. `3000:3000/TCP`), the URL is
+     `http://127.0.0.1:<host-port>` — check it with HTTP/browser. Do not wait
+     for the deploy payload to name it.
+   - If those fields are null and the service only has `ingress-routes` (no
+     `host-port`), the container is in a netns and is **not reachable on the
+     host**. That is a successful deploy of an unreachable app. Do not tell
+     the user it is live. Add `host-port` for local web services, or ensure
+     ingress is actually serving (`monk.cluster.ingress.ensure`, then check
+     80/443) before claiming done.
 
 Monk usually deploys projects in 20-40 minutes. Set that expectation when
 starting a deploy, while still reporting concrete progress and any project- or
@@ -544,5 +557,9 @@ Use official docs when unsure:
 ## Done condition
 
 The task is done only when Monk reports success and the deployed app or workload
-has been verified from outside the deploy operation. Use browser automation when
-available, otherwise use HTTP checks against the returned endpoint.
+has been verified from outside the deploy operation. Do not assume
+`monk.project.deploy` returned a URL — it often does not. Derive the local URL
+from `workload.status` `Ports`/`PublicPorts` (`http://127.0.0.1:<host-port>`)
+or from a live ingress on 80/443. If there is no host-port and ingress is not
+serving, the app is not reachable; that is not done. Use browser automation when
+available, otherwise HTTP checks against that derived URL.

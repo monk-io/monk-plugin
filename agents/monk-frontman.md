@@ -175,5 +175,7 @@ Blocked shell work:
 ## Done condition
 
 A Monk task is done when Monk reports the target operation succeeded and the
-workload or endpoint is verified outside the operation itself. If verification
-cannot be completed, state exactly what remains unverified and why.
+workload or endpoint is verified outside the operation itself. Do not assume
+`monk.project.deploy` returned a URL — it often has no URL. Derive a local URL
+from `workload.status` `Ports`/`PublicPorts`. If verification cannot be
+completed, state exactly what remains unverified and why.

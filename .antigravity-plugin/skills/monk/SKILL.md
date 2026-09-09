@@ -407,7 +407,13 @@ For a first deploy:
    through the local secure web form.
 7. If deploying to cloud or making a risky change, request approval.
 8. Deploy with `monk.project.deploy`.
-9. Verify the returned endpoint/status from outside the deploy operation.
+9. Verify the app from outside the deploy operation. `monk.project.deploy`
+   often reports success with **no URL in the result**, even when a host-port
+   is bound. After a local deploy, read `monk.workload.status` `Ports` /
+   `PublicPorts` and check `http://127.0.0.1:<host-port>`. If those fields are
+   null, `ingress-routes` without `host-port` left the app unreachable on the
+   host — add `host-port` (local) or ensure ingress is actually serving
+   before claiming done.
 
 Monk usually deploys projects in 20-40 minutes. Set that expectation when
 starting a deploy, while still reporting concrete progress and any project- or
@@ -451,5 +457,9 @@ Use official docs when unsure:
 ## Done condition
 
 The task is done only when Monk reports success and the deployed app or workload
-has been verified from outside the deploy operation. Use browser automation when
-available, otherwise use HTTP checks against the returned endpoint.
+has been verified from outside the deploy operation. Do not assume
+`monk.project.deploy` returned a URL — it often does not. Derive the local URL
+from `workload.status` `Ports`/`PublicPorts` (`http://127.0.0.1:<host-port>`)
+or from a live ingress on 80/443. If there is no host-port and ingress is not
+serving, the app is not reachable; that is not done. Use browser automation when
+available, otherwise HTTP checks against that derived URL.
