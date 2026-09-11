@@ -374,7 +374,8 @@ background_process_configured() {
     printf '%s\n' "$state" | grep -Fxq "auth_url=$auth_url" &&
     printf '%s\n' "$state" | grep -Fxq "auth_client_id=$auth_client_id" &&
     printf '%s\n' "$state" | grep -Fxq "auth_audience=$auth_audience" &&
-    printf '%s\n' "$state" | grep -Fxq "autospin_url=$autospin_url"
+    printf '%s\n' "$state" | grep -Fxq "autospin_url=$autospin_url" &&
+    printf '%s\n' "$state" | grep -Fxq "plugin_version=${MONK_PLUGIN_VERSION:-}"
 }
 
 if [ "${MONK_AGENT_SKIP_ENSURE:-0}" != "1" ]; then
