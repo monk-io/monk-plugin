@@ -30,7 +30,14 @@ $Cases = @(
   # ENG-448: the monkd daemon binary is blocked too, but monkdb (a different
   # program) is not — the trailing boundary still requires whitespace/EOL.
   @{ Name = "monkd"; Command = "monkd status"; Denied = $true },
-  @{ Name = "monkdb-lookalike"; Command = "monkdb migrate"; Denied = $false }
+  @{ Name = "monkdb-lookalike"; Command = "monkdb migrate"; Denied = $false },
+  # Shell separators must be treated as a trailing boundary so commands like
+  # "monk;ls" are blocked even when no whitespace follows the monk invocation.
+  @{ Name = "separator-semicolon"; Command = "monk;ls"; Denied = $true },
+  @{ Name = "separator-ampersand"; Command = "monk&ls"; Denied = $true },
+  @{ Name = "separator-pipe"; Command = "monk|ls"; Denied = $true },
+  @{ Name = "separator-double-ampersand"; Command = "monk&&ls"; Denied = $true },
+  @{ Name = "separator-multiple"; Command = "echo x; monk; ls"; Denied = $true }
 )
 
 function Assert-HookCases {

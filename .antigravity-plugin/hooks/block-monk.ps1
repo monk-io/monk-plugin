@@ -118,7 +118,7 @@ if (-not $command) { exit 0 }
 # `find -exec monk ...` or stacked wrappers (see plugin/static/claude/hooks/
 # block-monk.ps1 for the same tradeoff, spelled out in more detail).
 $normalized = $command.Replace('\', '').Replace('"', '').Replace("'", '')
-if ($normalized -match '(^|[\r\n;&|`({])\s*(sudo|command|env|exec|nohup|time|eval|xargs|awk|perl|python[0-9.]*|powershell(\.exe)?\s+-(Command|c)|cmd(\.exe)?\s+/c|(bash|sh|zsh)(\s+-c)?)?\s*(timeout(\s+-[A-Za-z]+(\s+\S+)?)*\s+[0-9.]+\s+)?([A-Za-z_][A-Za-z0-9_]*=\S*\s+)*([^\s;&|`(){}]*[\\/])?monkd?(\.(exe|cmd|bat|ps1))?(\s|$)') {
+if ($normalized -match '(^|[\r\n;&|`({])\s*(sudo|command|env|exec|nohup|time|eval|xargs|awk|perl|python[0-9.]*|powershell(\.exe)?\s+-(Command|c)|cmd(\.exe)?\s+/c|(bash|sh|zsh)(\s+-c)?)?\s*(timeout(\s+-[A-Za-z]+(\s+\S+)?)*\s+[0-9.]+\s+)?([A-Za-z_][A-Za-z0-9_]*=\S*\s+)*([^\s;&|`(){}]*[\\/])?monkd?(\.(exe|cmd|bat|ps1))?(\s|[;&|`)}]|$)') {
   @{
     decision = "deny"
     reason   = "Blocked: do not shell out to the ``monk`` CLI - it desyncs the cluster state Monk manages. Use the monk-agent MCP tools instead."
