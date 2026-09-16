@@ -58,7 +58,10 @@ if command -v flock >/dev/null 2>&1; then
   exec 3>"$lock_file"
   if ! flock -n 3; then
     echo "Another monk-agent install is in progress; waiting..." >&2
-    flock 3
+    if ! flock -w 60 3; then
+      echo "Timed out waiting for monk-agent install lock after 60 seconds." >&2
+      exit 1
+    fi
   fi
 fi
 
