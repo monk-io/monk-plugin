@@ -9,6 +9,10 @@
 
 set -eu
 
+# Drain stdin so Antigravity's PreInvocation writer never blocks, even though
+# this hook ignores the payload (plugin#408).
+cat >/dev/null
+
 port="${MONK_AGENT_PORT:-7419}"
 host="${MONK_AGENT_HOST:-127.0.0.1}"
 # IPv6 loopback hosts (e.g. ::1, an explicit MONK_AGENT_HOST override) must be
