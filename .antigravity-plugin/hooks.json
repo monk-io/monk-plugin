@@ -4,7 +4,7 @@
     "PreInvocation": [
       {
         "type": "command",
-        "command": "scripts\\run-powershell.cmd hooks\\ensure-monk-agent.ps1",
+        "command": "scripts/run-powershell.cmd hooks/ensure-monk-agent.ps1",
         "timeout": 20
       },
       {
@@ -22,7 +22,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "scripts\\run-powershell.cmd hooks\\block-monk.ps1",
+            "command": "scripts/run-powershell.cmd hooks/block-monk.ps1",
             "timeout": 5
           },
           {
@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "scripts\\run-powershell.cmd hooks\\monk-diagnostics.ps1",
+            "command": "scripts/run-powershell.cmd hooks/monk-diagnostics.ps1",
             "timeout": 30
           },
           {
