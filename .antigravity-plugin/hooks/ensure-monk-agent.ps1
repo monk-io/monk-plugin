@@ -114,8 +114,24 @@ if (Test-Path $TelemetryHelper) {
 $InstallDir = if ($env:MONK_AGENT_INSTALL_DIR) { $env:MONK_AGENT_INSTALL_DIR } else { Join-Path $HOME ".monk\bin" }
 $AgentPath = if ($env:MONK_AGENT_PATH) { $env:MONK_AGENT_PATH } else { Join-Path $InstallDir "monk-agent.exe" }
 
+# Run the managed bootstrap so plugin upgrades refresh monk-agent automatically.
+# -Quiet suppresses status output; non-output streams are redirected to $null
+# so only the resolved binary path is captured and the hook stdout stays JSON.
+$BootstrapScript = Join-Path (Split-Path -Parent $ScriptDir) "scripts\ensure-monk-agent.ps1"
+$ResolvedPath = $null
+if (Test-Path $BootstrapScript) {
+  $ResolvedPath = & $BootstrapScript -Quiet 2>$null 3>$null 4>$null 5>$null 6>$null
+}
+
+if ($ResolvedPath -and (Test-Path $ResolvedPath)) {
+  $AgentPath = $ResolvedPath
+} elseif ($env:MONK_AGENT_PATH) {
+  $AgentPath = $env:MONK_AGENT_PATH
+} else {
+  $AgentPath = Join-Path $InstallDir "monk-agent.exe"
+}
+
 if (-not (Test-Path $AgentPath)) {
-  $ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
   $PluginDir = Split-Path -Parent $ScriptDir
   $StartScript = Join-Path $PluginDir "scripts\start-monk-agent.ps1"
   Write-Json @{

@@ -1,5 +1,10 @@
 $ErrorActionPreference = "Stop"
 
+param(
+  [switch]$Quiet
+)
+
+
 # Windows PowerShell 5.1 renders an Invoke-WebRequest progress record per read
 # chunk, and that rendering — not the network — dominates a large download. This
 # installer runs inside the blocking SessionStart hook, so the cost is charged
@@ -207,7 +212,7 @@ try {
     }
   }
 
-  Write-Host "Installing monk-agent from $Url"
+  if (-not $Quiet) { Write-Host "Installing monk-agent from $Url" }
   Invoke-WebRequest -Uri $Url -OutFile $ArchiveTmp -UseBasicParsing
 
   $Actual = Get-FileSha256 $ArchiveTmp

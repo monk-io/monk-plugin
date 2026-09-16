@@ -65,8 +65,22 @@ if [ -f "$telemetry_helper" ]; then
   monk_emit_launcher_event antigravity || true
 fi
 
-# Find the installed binary
-agent_path="${MONK_AGENT_PATH:-${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent}"
+# Run the managed bootstrap so plugin upgrades refresh monk-agent automatically.
+# The bootstrap writes only the resolved binary path to stdout; diagnostics go
+# to stderr and are suppressed here to keep Antigravity's hook stdout clean.
+plugin_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+bootstrap_script="$plugin_dir/scripts/ensure-monk-agent.sh"
+agent_path=""
+if [ -x "$bootstrap_script" ]; then
+  agent_path="$("$bootstrap_script" 2>/dev/null)"
+fi
+
+# Fall back to the existing on-disk binary when the bootstrap is missing or
+# could not resolve a path (e.g. network down and no verified install).
+if [ -z "$agent_path" ] || [ ! -x "$agent_path" ]; then
+  agent_path="${MONK_AGENT_PATH:-${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent}"
+fi
+
 
 if [ ! -x "$agent_path" ]; then
   plugin_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
