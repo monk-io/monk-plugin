@@ -1,8 +1,30 @@
 # Changelog
 
-What's new in Monk. 55 releases between May 28 and September 16, 2026, newest first.
+What's new in Monk. 56 releases between May 28 and September 17, 2026, newest first.
 
 ## Unreleased
+
+## v0.1.65, 2026-09-17
+
+- Real, running clusters no longer disappear from your local list minutes after being created. A
+  cluster whose registration with the platform never succeeded was indistinguishable from one that
+  had been deleted on the platform, so the background sync removed the only local record of live,
+  billing infrastructure. Clusters the platform does know about are now also recorded as registered,
+  so they can't be mistaken for unregistered ones later.
+- Binding a cluster to an organization or project that the platform rejects now reports the failure
+  instead of returning success with the error buried in a message, and the cluster's registration
+  state now records what actually happened.
+- Deleting or forgetting a cluster that was never successfully registered with the platform no
+  longer fails permanently on the platform deregistration step — which left real infrastructure with
+  no way to remove it through Monk at all.
+- Creating a cluster against a project that doesn't exist now fails before any nodes are
+  provisioned, instead of after roughly nine minutes of real cloud spend. A confirmed missing
+  project blocks; billing, permission, or network problems reading it do not.
+- Creating a cluster from a workspace that isn't bound to an account or organization now refuses up
+  front, rather than provisioning infrastructure that could never be registered afterwards.
+- Listing secrets across all scopes, or viewing them in the dashboard, after switching clusters no
+  longer shows another cluster's organization, project, or environment secrets — entries are now
+  matched against the selected cluster's own organization/project/environment.
 
 ## v0.1.64, 2026-09-16
 
