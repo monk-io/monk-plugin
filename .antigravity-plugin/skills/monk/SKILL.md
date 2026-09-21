@@ -147,6 +147,8 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.workload.delete`
 - `monk.workload.purge`
 - `monk.workload.unload`
+- `monk.workload.actions`
+- `monk.workload.do`
 - `monk.analyzer.diagnose`
 - `monk.docs.search`
 - `monk.package.list`
@@ -161,6 +163,8 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.feedback.submit`
 - `monk.action.status`
 - `monk.dashboard.open` (when the dashboard is locked, unreachable, or the user needs a working link)
+- `monk.workload.action.trust.list`
+- `monk.workload.action.trust.revoke`
 - `monk://agent/status`
 - `monk://workspace/manifest`
 - `monk://workspace/workloads`

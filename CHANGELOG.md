@@ -1,8 +1,58 @@
 # Changelog
 
-What's new in Monk. 56 releases between May 28 and September 17, 2026, newest first.
+What's new in Monk. 57 releases between May 28 and September 21, 2026, newest first.
 
 ## Unreleased
+
+## v0.1.66, 2026-09-21
+
+- Updating capsule secrets that fail to write now records that failure in the operation's history,
+  instead of reporting it as succeeded.
+- Checking cluster registry status now distinguishes a transient failure to read the registry
+  credentials from the registry genuinely not being configured, instead of reporting both the same
+  way.
+- Looking up available GPU accelerator types now explains why none were found, instead of returning
+  an unexplained empty list.
+- Listing ingress certificates when the ingress plugin isn't enabled no longer errors out — it now
+  reports the same disabled status ingress status already does.
+- Reading recent agent activity no longer includes activity from other workspaces bound in the same
+  agent process — it now scopes to the current workspace, matching the feed and deploy history.
+- Unloading a workload template that's currently running now warns you it's live before you approve,
+  instead of silently leaving it running and no longer manageable by name.
+- Configuring a project no longer claims no deployment configuration exists when one already does —
+  it now checks first, instead of always deferring to author new files from scratch over a working
+  deploy.
+- Checking infrastructure usage for a personal account for the current month now works when the
+  month is passed explicitly, not just when it's omitted.
+- Checking cluster pricing when the daemon reports a well-formed result alongside a failure exit
+  code now surfaces that result cleanly, instead of showing the raw response as an error.
+- Reading the account-wide scope catalog now actually reports account-wide owner/project data,
+  instead of duplicating the current workspace's own scope.
+- Watching a deploy now reports what Monk is actually doing at each step — image pull progress,
+  script output, and errors — instead of repeating one generic progress line for every event.
+- Setting up CI/CD now checks that the connected GitHub token can actually push to the repository
+  before asking you to approve the plan, instead of after — a token that could only read a public
+  repository no longer sails through approval and only then fails on the write it required.
+- Initializing a session for a workspace whose path can't be resolved now fails with a clear error,
+  instead of silently binding to a different, phantom identity and stranding any secrets stored
+  under it where they can never be found again.
+- Cluster names are now checked against the strictest real cloud-provider naming rules up front,
+  instead of accepting a name a later step could still reject — or silently mismatch — once a
+  provider was chosen.
+- Creating a cluster with an empty or invalid name is now rejected up front instead of silently
+  falling back to a generic default name.
+- Your coding agent can now discover the custom actions a package attaches to a workload — a
+  database's snapshot and restore operations, for example — instead of only the built-in lifecycle
+  verbs. It also reports when a package declares no argument schema for an action, so it points you
+  at that package's own docs rather than guessing at argument names that would be silently ignored.
+- Your coding agent can now run a package's custom actions — taking a database snapshot, restoring
+  one — instead of only reporting that they exist. You approve the exact action and every argument
+  value in the dashboard first, and can tick "always allow" on an action you run often. Monk can't
+  tell whether an action only reads or also changes things, so nothing runs unattended unless you
+  said it could, and you can withdraw that at any time.
+- Running a custom action that returns a value instead of printing output now reports that value,
+  instead of saying it produced no output.
+- Security hardening to resetting Monk's local state.
 
 ## v0.1.65, 2026-09-17
 
