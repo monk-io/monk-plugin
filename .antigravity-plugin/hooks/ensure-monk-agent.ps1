@@ -92,6 +92,48 @@ function Test-AgentRunning {
   }
 }
 
+# Kill a stale monk-agent process recorded in the PID file before starting a
+# replacement. Mirrors Stop-ManagedAgent in scripts/start-monk-agent.ps1 so the
+# ensure path does not leave hung orphans behind (plugin#394).
+function Stop-StaleAgent {
+  param([string]$PidFilePath, [string]$ExpectedPath)
+
+  if (-not (Test-Path $PidFilePath)) { return }
+
+  $RawPid = (Get-Content -Raw $PidFilePath).Trim()
+  if (-not $RawPid) { return }
+
+  $ParsedPid = 0
+  if (-not [int]::TryParse($RawPid, [ref]$ParsedPid) -or $ParsedPid -le 0) {
+    Remove-Item -Force $PidFilePath -ErrorAction SilentlyContinue
+    return
+  }
+
+  $OldProcess = Get-Process -Id $ParsedPid -ErrorAction SilentlyContinue
+  if (-not $OldProcess) { return }
+
+  $ProcessPath = ""
+  try { $ProcessPath = $OldProcess.Path } catch { $ProcessPath = "" }
+
+  $KillIt = $false
+  if ($ProcessPath) {
+    try {
+      $ExpectedFull = [IO.Path]::GetFullPath($ExpectedPath)
+      $ProcessFull = [IO.Path]::GetFullPath($ProcessPath)
+      if ($ExpectedFull -ieq $ProcessFull) { $KillIt = $true }
+    } catch { }
+  } elseif (Test-Path $ExpectedPath) {
+    # No path available from the OS; only kill if the expected binary exists
+    # as a safety guard against killing an unrelated process that reused the PID.
+    $KillIt = $true
+  }
+
+  if ($KillIt) {
+    Stop-Process -Id $OldProcess.Id -Force -ErrorAction SilentlyContinue
+    Wait-Process -Id $OldProcess.Id -Timeout 5 -ErrorAction SilentlyContinue
+  }
+}
+
 # Fast path - already up. No telemetry here: this is a PreInvocation hook that
 # fires per model step, so emitting on the warm path would spam. The beacon fires
 # only on the cold-start paths below (install-needed / (re)start), which is the
@@ -138,6 +180,9 @@ $LogErr = Join-Path $LogDir "monk-agent.err.log"
 # scripts/uninstall-monk-agent.ps1) so a companion this hook starts in the
 # background is found and stopped on uninstall instead of surviving it.
 $PidFile = Join-Path $RunDir "monk-agent.pid"
+
+# Ensure we do not leave a hung orphan from a previous launch (plugin#394).
+Stop-StaleAgent -PidFilePath $PidFile -ExpectedPath $AgentPath
 
 $env:MONK_AUTH_URL = if ($env:MONK_AUTH_URL) { $env:MONK_AUTH_URL } else { "https://auth.monk.io" }
 $env:MONK_AGENT_AUTH_CLIENT_ID = if ($env:MONK_AGENT_AUTH_CLIENT_ID) { $env:MONK_AGENT_AUTH_CLIENT_ID } else { "UW84YWcJME3buMSLfqLX8IbBsYdNWi47" }

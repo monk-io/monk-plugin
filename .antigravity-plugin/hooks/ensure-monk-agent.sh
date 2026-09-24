@@ -47,6 +47,71 @@ emit_inject_steps() {
   printf '%s\n' "{\"injectSteps\":[{\"ephemeralMessage\":\"$escaped\"}]}"
 }
 
+# Kill a stale monk-agent process recorded in the PID file before starting a
+# replacement. Mirrors Stop-StaleAgent in ensure-monk-agent.ps1 so the ensure
+# path does not leave hung orphans behind (plugin#394).
+stop_stale_agent() {
+  _pid_file="$1"
+  _agent_path="$2"
+
+  [ -f "$_pid_file" ] || return 0
+
+  _old_pid="$(cat "$_pid_file" 2>/dev/null || true)"
+  case "$_old_pid" in
+    ''|*[!0-9]*) rm -f "$_pid_file"; return 0 ;;
+  esac
+
+  if ! kill -0 "$_old_pid" 2>/dev/null; then
+    rm -f "$_pid_file"
+    return 0
+  fi
+
+  _kill_it=0
+  _os="$(uname -s 2>/dev/null || printf unknown)"
+  if [ "$_os" = "Linux" ]; then
+    _actual_path=""
+    if command -v readlink >/dev/null 2>&1; then
+      _actual_path="$(readlink "/proc/$_old_pid/exe" 2>/dev/null || true)"
+    fi
+    case "$_actual_path" in
+      *" (deleted)") _actual_path="${_actual_path% *}" ;;
+    esac
+    _expected_path="$_agent_path"
+    if [ -n "$_actual_path" ]; then
+      if command -v realpath >/dev/null 2>&1; then
+        _expected_path="$(realpath "$_agent_path" 2>/dev/null || printf '%s' "$_agent_path")"
+        _actual_path="$(realpath "$_actual_path" 2>/dev/null || printf '%s' "$_actual_path")"
+      elif command -v readlink >/dev/null 2>&1; then
+        _expected_path="$(readlink -f "$_agent_path" 2>/dev/null || printf '%s' "$_agent_path")"
+        _actual_path="$(readlink -f "$_actual_path" 2>/dev/null || printf '%s' "$_actual_path")"
+      fi
+    fi
+    if [ -n "$_actual_path" ] && [ "$_actual_path" = "$_expected_path" ]; then
+      _kill_it=1
+    fi
+  else
+    # Non-Linux: fall back to command name so we don't kill an unrelated reused PID.
+    _comm=""
+    if command -v ps >/dev/null 2>&1; then
+      _comm="$(ps -p "$_old_pid" -o comm= 2>/dev/null || true)"
+    fi
+    case "$_comm" in
+      *monk-agent*) _kill_it=1 ;;
+    esac
+  fi
+
+  if [ "$_kill_it" = "1" ]; then
+    kill -TERM "$_old_pid" 2>/dev/null || true
+    _wait=0
+    while kill -0 "$_old_pid" 2>/dev/null && [ "$_wait" -lt 10 ]; do
+      sleep 1
+      _wait=$((_wait + 1))
+    done
+    kill -KILL "$_old_pid" 2>/dev/null || true
+  fi
+  rm -f "$_pid_file"
+}
+
 # Fast path — already up. No telemetry here: this is a PreInvocation hook that
 # fires per model step, so emitting on the warm path would spam. The beacon
 # fires only on the cold-start paths below (install-needed / (re)start), which
@@ -84,6 +149,9 @@ log_file="$log_dir/monk-agent.log"
 # scripts/uninstall-monk-agent.sh) so a companion this hook starts in the
 # background is found and stopped on uninstall instead of surviving it.
 pid_file="$run_dir/monk-agent.pid"
+
+# Ensure we do not leave a hung orphan from a previous launch (plugin#394).
+stop_stale_agent "$pid_file" "$agent_path"
 
 export MONK_AUTH_URL="${MONK_AUTH_URL:-https://auth.monk.io}"
 export MONK_AGENT_AUTH_CLIENT_ID="${MONK_AGENT_AUTH_CLIENT_ID:-UW84YWcJME3buMSLfqLX8IbBsYdNWi47}"
