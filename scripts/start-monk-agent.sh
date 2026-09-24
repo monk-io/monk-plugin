@@ -123,7 +123,7 @@ raise SystemExit(0 if isinstance(cfg, dict) else 1)' "$mcp_cfg" >/dev/null 2>&1 
     # prior host/port must be refreshed, not mistaken for an existing one.
     already_registered=0
     if command -v jq >/dev/null 2>&1; then
-      jq -e --arg u "$server_url" '.mcpServers.monk.serverUrl == $u' "$mcp_cfg" >/dev/null 2>&1 &&
+      jq -e --arg u "$server_url" 'if (.mcpServers | type) == "object" then .mcpServers.monk.serverUrl == $u else false end' "$mcp_cfg" >/dev/null 2>&1 &&
         already_registered=1
     elif command -v python3 >/dev/null 2>&1; then
       python3 -c '
@@ -144,7 +144,7 @@ sys.exit(0 if isinstance(monk, dict) and monk.get("serverUrl") == sys.argv[2] el
   tmp="$(mktemp)"
   if command -v jq >/dev/null 2>&1; then
     if [ "$has_existing" = "1" ]; then
-      jq --arg u "$server_url" '.mcpServers.monk = {serverUrl: $u}' "$mcp_cfg" >"$tmp"
+      jq --arg u "$server_url" '.mcpServers = (if (.mcpServers | type) == "object" then .mcpServers else {} end) | .mcpServers.monk = {serverUrl: $u}' "$mcp_cfg" >"$tmp"
     else
       jq -n --arg u "$server_url" '{mcpServers: {monk: {serverUrl: $u}}}' >"$tmp"
     fi
