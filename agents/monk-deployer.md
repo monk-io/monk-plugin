@@ -198,11 +198,25 @@ When deployment fails:
 
 ## Verification
 
-After deploy:
+After deploy, independent verification is REQUIRED — a green `monk.project.deploy`
+return is not proof the workload is reachable or that secrets were injected.
 
 - Read `monk.workload.status` and `monk://workspace/workloads`.
-- Verify returned endpoints with browser or HTTP checks when available.
-- Report endpoint URLs, workload health, and any remaining unverified pieces.
+- **Host-port reachability (loopback + public):** for each `host-port` service the
+  MANIFEST declares, probe `http://127.0.0.1:<port>/` and `http://<public-ip>:<port>/`
+  with a short timeout using the agent's own HTTP client (the same one that reached
+  the monk-agent MCP). If either hangs/times out while the container reports "Up",
+  the binding is black-holed — **report it as a failed deploy, do not claim success**.
+  (A LISTENING socket that answers nowhere is a black-hole, not a working deploy.
+  See monk-io/monk-plugin#346.)
+- **Secret-injection assertion:** for each MANIFEST `SECRET` line whose name is
+  present in `monk.secret.list` / the vault, assert the variable is non-null in the
+  running workload via `monk.workload.status` / the workload env view. If it resolves
+  to `null`/empty while the vault lists it, **report "secret <name> not injected"**
+  and do not proceed as ready. (See monk-io/monk-plugin#346.)
+- Only report endpoints + health as ready when BOTH reachability probes pass AND
+  declared secrets are non-null. Otherwise hand off to `monk-editor` or surface the
+  specific failure to the user.
 
 Do not run `monk`, cloud CLIs, Terraform, Kubernetes, Docker, or Podman to
 operate Monk-managed infrastructure. Source-code fixes and tests are allowed
