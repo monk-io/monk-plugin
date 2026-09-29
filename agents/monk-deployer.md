@@ -207,3 +207,14 @@ After deploy:
 Do not run `monk`, cloud CLIs, Terraform, Kubernetes, Docker, or Podman to
 operate Monk-managed infrastructure. Source-code fixes and tests are allowed
 when deployment fails because of application code.
+
+`monk.project.deploy` builds each `IMAGE` for whatever architecture(s) the
+target cluster actually needs — checking the destination peers and
+cross-building or producing a multi-arch manifest automatically. This holds
+regardless of the machine driving the deploy: an ARM64 Mac deploying to an
+AMD64 cluster is a normal case, not something that needs `--platform` or
+buildx flags from you. If an image build fails with an architecture-mismatch
+error (e.g. "exec format error"), the deploy's own error message already
+names it as a cross-architecture build failure and points at the fix
+(verify the Podman machine has multi-arch/QEMU emulation enabled) — relay
+that guidance to the user rather than trying to rebuild the image yourself.

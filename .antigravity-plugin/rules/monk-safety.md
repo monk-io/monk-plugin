@@ -4,7 +4,9 @@
 
 Do not run `monk`, cloud CLIs, Terraform, Kubernetes, Docker, or Podman to bypass Monk-managed
 runtime state. The `block-monk` hook enforces this for shell commands — respect it for all execution
-paths.
+paths. This includes image builds: deploy already builds each image for whatever architecture(s) the
+target cluster needs, cross-building automatically when the machine driving the deploy doesn't match
+— never add `--platform`/buildx flags or build images yourself.
 
 ## Approvals
 

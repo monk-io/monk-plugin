@@ -340,6 +340,20 @@ if [ "$managed_agent_ensured" = "1" ]; then
   fi
 fi
 
+# Open-file limit for the agent. launchd's default soft limit is 256, which a
+# long-running agent that shells out to the monk CLI can exhaust; raising it
+# gives headroom. Only the soft limit is set: the hard limit stays at the
+# system default so it is never lowered. Checked by launchd_configured, so a
+# plist written before the limit existed is rewritten once.
+agent_fd_limit=8192
+
+raise_fd_limit() {
+  current="$(ulimit -n 2>/dev/null || echo 0)"
+  [ "$current" = "unlimited" ] && return 0
+  [ "$current" -ge "$agent_fd_limit" ] 2>/dev/null && return 0
+  ulimit -n "$agent_fd_limit" 2>/dev/null || ulimit -n "$(ulimit -Hn 2>/dev/null)" 2>/dev/null || true
+}
+
 launchd_configured() {
   # Deliberately excludes PATH: it is derived from the invoking shell/app and
   # legitimately differs across hosts (Claude Code, VS Code, plain terminal) and
@@ -354,12 +368,13 @@ launchd_configured() {
   # cannot cause the per-session restart churn PATH did.
   [ -f "$launchd_plist" ] &&
     grep -Fq "<string>$agent_path</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_client_id</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_url</string>" "$launchd_plist" &&
-    grep -q "<string>$auth_audience</string>" "$launchd_plist" &&
-    grep -q "<string>$autospin_url</string>" "$launchd_plist" &&
-    grep -q "<string>${MONK_AGENT_LOCAL:-}</string>" "$launchd_plist" &&
-    grep -q "<string>${MONK_PLUGIN_VERSION:-}</string>" "$launchd_plist"
+    grep -Fq "<string>$auth_client_id</string>" "$launchd_plist" &&
+    grep -Fq "<string>$auth_url</string>" "$launchd_plist" &&
+    grep -Fq "<string>$auth_audience</string>" "$launchd_plist" &&
+    grep -Fq "<string>$autospin_url</string>" "$launchd_plist" &&
+    grep -Fq "<string>${MONK_AGENT_LOCAL:-}</string>" "$launchd_plist" &&
+    grep -Fq "<string>${MONK_PLUGIN_VERSION:-}</string>" "$launchd_plist" &&
+    grep -Fq "<integer>$agent_fd_limit</integer>" "$launchd_plist"
 }
 
 # The background-process (non-launchd) path has no plist to introspect, so the
@@ -428,6 +443,11 @@ start_with_launchd() {
        instead of ~6, while still self-healing once the port frees. -->
   <key>ThrottleInterval</key>
   <integer>60</integer>
+  <key>SoftResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>$agent_fd_limit</integer>
+  </dict>
   <key>EnvironmentVariables</key>
   <dict>
     <key>MONK_AUTH_URL</key>
@@ -499,6 +519,7 @@ start_with_background_process() {
   export MONK_AGENT_LOCAL="${MONK_AGENT_LOCAL:-}"
   export MONK_PLUGIN_VERSION="${MONK_PLUGIN_VERSION:-}"
   export MONK_AGENT_LAUNCH_CLIENT="$client"
+  raise_fd_limit
   if command -v setsid >/dev/null 2>&1; then
     setsid "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &
   elif command -v nohup >/dev/null 2>&1; then

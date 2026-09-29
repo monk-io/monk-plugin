@@ -1,8 +1,125 @@
 # Changelog
 
-What's new in Monk. 57 releases between May 28 and September 21, 2026, newest first.
+What's new in Monk. 58 releases between May 28 and September 29, 2026, newest first.
 
 ## Unreleased
+
+## v0.1.67, 2026-09-29
+
+- The dashboard's Work list shows the newest items first within each group.
+- Credential requests in the dashboard's Work list show the provider logos they ask for next to the
+  key icon.
+- A credential request now reads "1 credential required" or "3 credentials required" instead of a
+  count of sections. In the dashboard, choosing to enter OAuth credentials manually no longer traps
+  you there: a link brings back the authorize button.
+- Cloud and service credential requests in the dashboard show the provider's logo (AWS, Azure, GCP,
+  MongoDB Atlas, Neon, GitHub and the rest), and the Vault's cloud accounts are picked from logo
+  tiles instead of a dropdown. The light theme now uses the pastel Monk mark, like the dark one.
+- The local dashboard is reorganized around what you look at. Clusters is now a table that opens
+  onto one page per cluster, with its details, live map, the secrets that apply to it, and forget
+  and delete. Credentials became Vault, split into cloud accounts, local secrets and cluster
+  secrets. A new This machine page collects what used to sit behind the status bar's Details: Monk's
+  health, where it keeps secrets, connected editors, and diagnostics. Old links to the cluster,
+  cluster map and credentials pages still work. The status indicator and the Sign in button no
+  longer spill out of the narrow, icon-only sidebar.
+- Monk keeps working through long sessions. Commands it ran behind the scenes could leave files open
+  when they timed out or left a helper process running, and after an hour or so of use every deploy
+  and status check failed with "Too many open files". Those are now always closed, a timed-out
+  command is stopped along with anything it started, and on macOS the background service is allowed
+  far more open files. If it ever does run out, the error now says so and how to restart the
+  service, instead of reading as a failed deploy.
+- A dashboard tab left open while Monk restarts (after an update, for example) now says so: a banner
+  asks you to reload the page, with a button to do it, and a click on an approval explains the same
+  instead of showing "invalid csrf token" while the request still looked like it was waiting on you.
+  Approving a workspace's organization or project is no longer labeled a destructive action that
+  can't be undone, since you can always bind it again; it still needs your approval.
+- Retrying a cluster creation that was cut off by a restart now picks up the interrupted attempt and
+  finishes it. It used to start over, find the nodes the first attempt had made, and tell you to run
+  the creation again, which then refused because the cluster already existed. When a creation does
+  find a same-named cluster with nodes, it now points you to checking, growing or deleting that
+  cluster, the same advice the next attempt gives.
+- A cluster creation, grow or deletion cut off by a restart now warns that cloud nodes may already
+  be running and billing, and names the steps to check the cluster's machines and to finish or
+  remove it. A request made after a restart without a workspace now says to start the session again.
+- Installing Monk on Windows now finishes starting the local runtime where your coding agent can
+  reach it. It used to leave the runtime running but unreachable, so every deploy failed until it
+  was restarted by hand. Install status now also reports that situation instead of calling the
+  runtime ready, and an install step that fails inside WSL is now reported as failed rather than as
+  done.
+- The dashboard has a new Environments page: a live map of your app as it runs in each of its
+  environments, drawn from the environment's own cluster. It shows each workload's health, your
+  clouds and machines, and where ingress is served. It stays current by itself, and keeps its layout
+  as things change.
+- Each cluster on the dashboard's Clusters page now has a map of everything it runs: every
+  environment's apps side by side, or one environment at a time, with the environments hosted on the
+  cluster listed below and linked to their Environments page.
+- A deploy review's Tree tab now matches the rest of the review: every workload and field in one
+  indented list, with an entity's data and schema changes shown key by key and hidden values marked.
+- Adding nodes to a cluster now opens the same editable review as creating one, instead of a yes/no
+  approval: change the machine type, count, region or disk before approving, see the estimated cost,
+  and see a diagram of the cluster's machines now next to the new ones. Cluster creation's review
+  draws the machines it provisions too, and shows its steps once approved.
+- Deploy reviews have a new What it builds tab: a diagram of the app the deploy creates, with what
+  changes marked (new, updated, recreated, scaled, removed), your cloud and cluster as zones,
+  managed databases and buckets beside the cluster, and a note on anything the diagram can't know
+  yet. Ingress on a host that isn't publicly reachable is flagged. For an app that is already
+  running, the diagram comes from what your cluster actually runs: every connection's target, which
+  container serves each service, and which volumes are mounted where.
+- Deploy approval previews now render an entity's data and schema as an expandable tree — nested
+  objects and array fields each get their own row, with a collapse toggle — instead of one long line
+  of text.
+- Approving a cluster creation at the moment it times out, or approving and cancelling it from two
+  tabs, now settles on one outcome and reports it once, instead of reporting both. Two identical
+  cluster creations started at the same time now start one cluster, not two.
+- A finished task no longer changes status afterwards: a late failure or an interrupted run
+  finishing after a restart can no longer rewrite how it ended. Clearing task history while a task
+  is logging no longer brings cleared tasks back.
+- Installing Monk no longer reports the runtime as already ready when everything it needs is in
+  place but the runtime itself isn't responding; it now says what's wrong instead.
+- Cluster changes (create, grow, delete) started from two sessions at the same time now always run
+  one after the other; before, both could occasionally run at once. If Monk quits or crashes in the
+  middle of one, the next no longer waits several minutes before it can start.
+- Checking Monk's status, or starting it a second time, while it's already running no longer cancels
+  approvals you haven't answered yet or marks operations in progress as interrupted.
+- Installing Monk no longer hangs when a step stops responding, never starts a second copy of an
+  install that is still running, and stops everything it started when it gives up on a step.
+- If starting Monk shows that it also needs an upgrade, the install now asks you to approve the
+  upgrade too, instead of stopping halfway.
+- Install errors now say which step failed and why, including when a step ran out of time.
+- Installing Monk on Linux no longer reports that apt or dnf is missing when checking for them
+  fails.
+- Submitting a secret, certificate or credential form from two dashboard tabs at once now keeps
+  exactly one submission, instead of losing the value or applying a different certificate than the
+  one recorded. A submission that fails to save can now be retried.
+- Two cluster operations running at once no longer overwrite each other's progress, which could make
+  a failed cluster creation start over instead of resuming.
+- Cluster creation no longer deletes a cluster whose nodes are still coming up after a slow or
+  interrupted provisioning. The nodes are kept, and running the same create again finishes the
+  cluster, or removes the empty cluster if no nodes were made.
+- A cluster creation interrupted by a restart no longer blocks creating that cluster again: running
+  the same create resumes it or starts over, and a resume that fails can itself be resumed.
+- Cluster creation now stops if it can't tell which cluster the local daemon is in, instead of
+  provisioning nodes into a different cluster and reporting success.
+- Creating a cluster with the name of an existing one is now refused, instead of provisioning a
+  second cluster under the same name. A cluster kept after a partly failed creation is recorded, so
+  you can grow or delete it.
+- A cluster renamed while reviewing its plan is now the one resumed or cleaned up after a failure.
+- Growing a cluster no longer holds up other cluster operations while it waits for your approval to
+  register that cluster.
+- Deploying no longer logs in to the cluster registry before you approve the plan. A denied or
+  timed-out plan now says that nothing running changed.
+- Two deploys to the same cluster no longer run at once, and a deploy no longer runs while that
+  cluster is being grown or deleted. The second one is refused and points you at the one already
+  running.
+- Switching clusters while a deploy runs no longer sends part of it to the other cluster.
+- A failed deploy now says which step it stopped at and what it had already changed, and a deploy
+  interrupted by a restart says the workload may be partly updated.
+- Deleting or forgetting a cluster from the dashboard now only ever acts on the cluster you
+  approved. Before, if selecting that cluster failed, the one already selected could be deleted
+  instead.
+- If Monk's local secret storage can't be opened, Monk now reports that when a secret is next used
+  instead of shutting down.
+- Security hardening.
 
 ## v0.1.66, 2026-09-21
 

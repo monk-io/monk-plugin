@@ -65,7 +65,7 @@ Before deploying:
    - you need to override the picked root with a specific absolute path, or
    - you want to record host/client/plugin-version metadata for telemetry.
      When you do call it, pass the absolute project directory as `workspaceRoot`
-     and include `pluginVersion: "0.1.66"` so telemetry reports the
+     and include `pluginVersion: "0.1.67"` so telemetry reports the
      real plugin version.
      `monk-agent` never falls back to its own working directory.
 4. Confirm auth status with `monk.auth.status` (once the tools are available). If
@@ -315,7 +315,11 @@ open the required approval flow when needed.
   typed feed form for all required values. Use `monk.secret.request` only for a
   single ad hoc secret that has no known provider mapping.
 - Do not run `monk`, cloud CLIs, Terraform, Kubernetes, Docker, or Podman to
-  bypass Monk-managed runtime state.
+  bypass Monk-managed runtime state. This includes image builds: deploy
+  already builds each image for whatever architecture(s) the target cluster
+  needs, cross-building automatically when the machine driving the deploy
+  doesn't match — never add `--platform`/buildx flags or build images
+  yourself.
 - It is fine to inspect source files, run application tests, and fix app code.
 - Generated MANIFEST and MonkScript YAML belong to Monk. Read them for context;
   coordinate changes through Monk tooling. In Claude Code, use the
