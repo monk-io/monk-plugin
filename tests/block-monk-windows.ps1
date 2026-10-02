@@ -9,7 +9,6 @@ $PluginHook = Join-Path $RepoRoot "plugins\monk\hooks\block-monk.ps1"
 $AntigravityHook = Join-Path $RepoRoot ".antigravity-plugin\hooks\block-monk.ps1"
 $MissingAgent = Join-Path $env:TEMP "missing-monk-agent-$PID.exe"
 $PreviousAgentPath = $env:MONK_AGENT_PATH
-$PreviousPath = $env:Path
 
 $Cases = @(
   @{ Name = "direct"; Command = "monk deploy"; Denied = $true },
@@ -30,7 +29,14 @@ $Cases = @(
   # ENG-448: the monkd daemon binary is blocked too, but monkdb (a different
   # program) is not — the trailing boundary still requires whitespace/EOL.
   @{ Name = "monkd"; Command = "monkd status"; Denied = $true },
-  @{ Name = "monkdb-lookalike"; Command = "monkdb migrate"; Denied = $false }
+  @{ Name = "monkdb-lookalike"; Command = "monkdb migrate"; Denied = $false },
+  # A quoted or escaped `|` is a grep alternation, not a pipeline; a real
+  # pipe, or one inside a re-parsed `sh -c` string, still counts.
+  @{ Name = "quoted-bre-alternation"; Command = 'grep -n "a\|monk" f'; Denied = $false },
+  @{ Name = "quoted-ere-alternation"; Command = 'grep -nE ''a|monk'' f'; Denied = $false },
+  @{ Name = "escaped-pipe"; Command = 'grep a\|monk f'; Denied = $false },
+  @{ Name = "real-pipe"; Command = 'grep "a|b" f | monk deploy'; Denied = $true },
+  @{ Name = "sh-c-pipe"; Command = 'sh -c "echo x | monk deploy"'; Denied = $true }
 )
 
 function Assert-HookCases {
@@ -48,7 +54,7 @@ function Assert-HookCases {
     } else {
       $Payload = @{ toolCall = @{ name = "run_command"; args = @{ CommandLine = $Case.Command } } } |
         ConvertTo-Json -Compress -Depth 5
-      $Output = $Payload | & $WindowsPowerShell -NoProfile -ExecutionPolicy Bypass -File $Hook
+      $Output = $Payload | & $WindowsPowerShell -NoProfile -ExecutionPolicy Bypass -File $Hook -Format antigravity
       $Denied = [bool]($Output -match '"decision":"deny"')
     }
 
@@ -71,16 +77,11 @@ try {
     $env:MONK_AGENT_PATH = $AgentPath
     Assert-HookCases -Hook $RootHook -Format "claude"
     Assert-HookCases -Hook $PluginHook -Format "claude"
+    # The Antigravity bundle carries the same shared script, run with -Format antigravity.
+    Assert-HookCases -Hook $AntigravityHook -Format "antigravity"
   }
-
-  # Antigravity runs both hook siblings when bash is available. Limit PATH so
-  # this test exercises the stock-Windows PowerShell fallback specifically.
-  $env:MONK_AGENT_PATH = $MissingAgent
-  $env:Path = Split-Path -Parent $WindowsPowerShell
-  Assert-HookCases -Hook $AntigravityHook -Format "antigravity"
 } finally {
   $env:MONK_AGENT_PATH = $PreviousAgentPath
-  $env:Path = $PreviousPath
 }
 
 Write-Host "Windows block-monk fallback tests passed."

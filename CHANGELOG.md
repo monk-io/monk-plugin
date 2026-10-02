@@ -1,8 +1,152 @@
 # Changelog
 
-What's new in Monk. 58 releases between May 28 and September 29, 2026, newest first.
+What's new in Monk. 59 releases between May 28 and October 2, 2026, newest first.
 
 ## Unreleased
+
+## v0.1.68, 2026-10-02
+
+- Shell commands that only mention `monk` inside a quoted search pattern, such as
+  `grep -n "a\|monk" file`, are no longer blocked as if they ran the Monk CLI.
+- In Google Antigravity on macOS and Linux, shell commands no longer fail with a hook error once the
+  Monk plugin is installed, and Monk now starts by itself when a conversation begins there.
+- Monk's command and template checks finish as soon as they have an answer, instead of keeping your
+  coding agent waiting for up to their full time limit on macOS and Linux.
+- Setup no longer reports Claude Code as failed in the default Windows console when the plugin
+  installed fine, and a re-run no longer offers it again.
+- Cursor and VS Code can now sign in to Monk. Monk refused their sign-in because they also offer a
+  web address to return to, which it doesn't accept; it now keeps the addresses it does accept and
+  goes ahead.
+- When Google Antigravity is installed without its `agy` command, as on Windows, setup now adds Monk
+  to Antigravity's MCP servers and tells you how to get the full plugin, instead of failing. A
+  command that isn't installed is now named in plain words rather than "entity not found".
+- Every item in Work now says which project it belongs to, in the list and under its title. A
+  project your coding agent was asked to configure shows as handed off rather than queued forever,
+  with what Monk asked the agent to do in a readable block instead of one line running off the
+  screen. Skipped steps no longer show as finished, and runtime notices read as sentences rather
+  than raw event data.
+- A sign-in request from an app that didn't give its name now says so, instead of showing an
+  internal id as if it were the app's name.
+- An open dashboard tab reconnects by itself after Monk restarts, as soon as you have a dashboard
+  session again (for example, once Monk opens a new tab), so pending approvals keep working without
+  reloading the page. Until then it shows the reload banner and stops retrying every request.
+- Monk now needs version 3.21.5 of the local Monk runtime. If yours is older, installing or updating
+  Monk upgrades it for you, with your approval first.
+- Work's filters take less room. Needs you, Active and All are tabs with a count on each, and the
+  order, workspace and organization choices sit together in one Display menu. When the list shows a
+  single workspace, its name sits beside the title and one click shows them all again.
+- When the dashboard is open in a tab, it now plays a sound and shows a system notification when
+  your coding agent needs an approval or a secret. Clicking the notification takes you straight to
+  the request. Turn each one on or off under This machine, where you can also choose to bring the
+  browser forward on every new request.
+- The dashboard greets you properly when there's nothing to do. Work celebrates a clear inbox with
+  what got finished today, and empty pages explain what will appear there, with a prompt to copy
+  into your coding agent. Work also remembers your view and grouping across a refresh, and the
+  delete confirmation no longer spills out of its box on narrow screens.
+- The dashboard keeps its shape while it loads. Work shows its list and toolbar right away with
+  placeholder rows, and moving between tasks no longer blanks their steps for a moment.
+- Monk now checks that every download of Monk is signed by Monk before installing it. An update that
+  fails the check is not installed, and the version you already have keeps working.
+- When Monk can't check for an update, for example while you're offline, it now starts the version
+  you already have instead of failing.
+- When a deploy fails, its step log in the dashboard and in your coding agent now shows the error as
+  readable text instead of an encoded string, and no longer says "Image ready" right after an image
+  failed to download.
+- A new `setup` command connects Monk to every coding agent it finds on your machine. You pick the
+  agents from a checklist and review the plan before anything changes. It installs or updates the
+  Monk plugin where the agent has plugins (Claude Code, Codex, Devin, Antigravity), and adds Monk's
+  server and skill to the settings of the others, such as Zed, OpenCode, Cline, Goose, Warp and Amp,
+  keeping your existing settings and a backup. Running it again brings an older Monk up to date. It
+  ends with a summary of what worked and offers to sign you in, which you can skip.
+- Install Monk and connect your coding agents in one line:
+  `curl -fsSL https://get.monk.io/stable/plugin | sh`, with a matching PowerShell one-liner on
+  Windows. Running it again updates Monk.
+- Apps that can only run a local tool over standard input and output, such as Claude Desktop, can
+  now use Monk through a new optional `mcp-stdio` command. It starts Monk if it isn't running, signs
+  you in with the same browser approval as everywhere else, and connects. It is optional: the normal
+  local connection keeps working and stays the default for Claude Code, Codex, Cursor and the rest.
+- Opening Cursor on a machine where Claude Code also has the Monk plugin no longer restarts Monk
+  each time and leaves your agents unable to reach it for about a minute.
+- When your coding agent names a project folder on a call, Monk now uses that project's cluster,
+  environment and secrets for it. After your coding agent reconnected, such a call could resolve the
+  cluster of the folder the agent was started in, so a deploy or delete aimed at one project could
+  have gone to another project's cluster while still naming the right folder.
+- Selecting a cluster in the dashboard now applies to the workspace shown in the header, and
+  credentials you enter for an organization, project or environment are saved for the project that
+  asked for them, instead of for whichever coding agent connected to Monk last.
+- When your coding agent names a folder outside the ones it shared with Monk, the call now fails and
+  says so, instead of quietly running against the shared folder.
+- Retrying a cluster grow after your coding agent reconnects now reports the grow already in
+  progress instead of starting a second one.
+- The dashboard no longer keeps listing coding agent connections that have ended.
+- Hardening for how sessions are matched to the coding agent that opened them.
+- Monk now works when your coding agent is installed as a strictly confined snap, such as Claude
+  Code from the Snap Store. Installing tells you what's going on instead of failing on permissions:
+  it writes the install steps to a script you run once in a normal terminal. After that Monk starts
+  reliably inside the sandbox, and deploys work from it: loading your project, building images,
+  reading cluster costs and enabling ingress on a new cluster no longer need the Monk command-line
+  tool or podman, since Monk on the host does the work. The one exception is a cluster whose nodes
+  span more than one architecture, whose images still have to be built outside the sandbox.
+- Enabling ingress on a new cluster is retried when Monk declines it, instead of the step reporting
+  ingress as enabled when it wasn't.
+- Creating a cluster on a cloud whose new nodes take a minute or more to open the registry port,
+  such as DigitalOcean, no longer fails at the registry step with a login timeout. Monk now waits
+  for the registry to become reachable and retries the login, so the first create finishes without
+  you having to run it again.
+- On Windows, a deploy, grow or delete refused because another operation is already running on the
+  cluster now names that operation, so your coding agent can follow its progress instead of only
+  being told to try again later.
+- Your coding agent can now list the blobs stored on a cluster and delete one it no longer needs,
+  after you approve the deletion in the dashboard.
+- Hardening for how project files are read during a deploy.
+- Two workspaces using Monk on the same machine no longer silently get in each other's way. The
+  machine has one Monk daemon, and a cluster create in one workspace used to pull it out from under
+  a local deploy in another. A cluster create, a cluster exit and a provider setup now wait their
+  turn: while a local deploy runs they are refused with a "busy" message naming the deploy, and a
+  local deploy is refused the same way while one of them runs. A deploy that finds the daemon moved
+  to another cluster anyway (for example by the Monk CLI) now fails and names both clusters instead
+  of reporting success. Workload status, stop and delete now say which cluster they looked at, and
+  "not found" explains when the workload is in a cluster the daemon has since left, and that nothing
+  was deleted.
+- When a cluster creation was cut off and its cloud nodes could not all be cleaned up, retrying it
+  now names the leftover nodes and asks you to delete them in your cloud provider's console, instead
+  of quietly starting over while they keep billing.
+
+- Retrying a cluster creation right after a restart now finishes it, as promised in v0.1.67. If the
+  cloud nodes were still being provisioned, the retry used to refuse and ask you to come back in up
+  to about 20 minutes. It now checks whether provisioning is actually still running: it finishes the
+  cluster as soon as the nodes are up, and starts over right away when nothing is left provisioning.
+- After a cluster node gets a new domain, preparing or resetting the cluster registry now moves it
+  to that domain and its certificate. Before, the registry kept the old domain, so image pulls
+  failed certificate checks. Preparing the registry keeps its password; the login for the old
+  address is removed and other registry logins are left alone.
+- Security hardening to cluster registry credentials.
+- Security hardening to cluster credentials.
+- Approving a registry password reset now tells you what stops working until it is updated: the
+  registry secrets your GitHub Actions use and any other logins to the registry. Re-run CI/CD setup
+  afterwards to refresh them.
+- A cluster left behind by an interrupted creation can now be deleted by the name the interruption
+  message gives. Before, deleting it by name said the cluster was not found, and only a delete with
+  no name worked. A name that doesn't match now also says which cluster the machine is connected to.
+- Deleting a cluster no longer ends with a warning that the local runtime could not be disconnected
+  when the delete had already disconnected it.
+- After the local Monk service restarts, your coding agent reconnects instead of carrying on with a
+  connection that can no longer remember its workspace. Before, a session set up after the restart
+  was forgotten on the next call, and every call needed the session id passed by hand.
+- In Codex, Monk now checks your MANIFEST and templates after Codex edits them through a shell
+  command, not only through its file-editing tool, and tells Codex about any errors it finds. The
+  command's own output is left as it was.
+- Your coding agent can now renew an expired or expiring certificate on a cluster node, including
+  the one the cluster registry uses. The node keeps its domain, so the registry address and your CI
+  settings stay valid. The registry and ingress restart to serve the new certificate, and Monk
+  checks that they do before reporting success. Before, the only way out was to give the node a new
+  domain, which changed the registry address.
+- On Windows, installing, upgrading or repairing Monk in your own Ubuntu WSL distro no longer
+  replaces its `/etc/wsl.conf`. Monk only turns systemd on and keeps your other settings (network,
+  mounts, default user), saving the original as `/etc/wsl.conf.monk-bak` first. The distro is
+  restarted only when systemd isn't running yet, instead of on every install, upgrade and repair,
+  which stopped whatever you had running in it. If your WSL is too old to run systemd, Monk now says
+  so and asks you to run `wsl --update` instead of failing later.
 
 ## v0.1.67, 2026-09-29
 

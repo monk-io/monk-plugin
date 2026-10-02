@@ -165,6 +165,8 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.dashboard.open` (when the dashboard is locked, unreachable, or the user needs a working link)
 - `monk.workload.action.trust.list`
 - `monk.workload.action.trust.revoke`
+- `monk.blob.list`
+- `monk.blob.delete`
 - `monk://agent/status`
 - `monk://workspace/manifest`
 - `monk://workspace/workloads`
@@ -224,6 +226,12 @@ run.
   - `ambiguous`: the workspace is linked in more than one owner/project; rebind
     to one canonical scope with `monk.scope.bind` and `confirmMove: true`.
   - `resolved`: proceed.
+- "Link this repo to a Monk project", "show this project in my Monk
+  dashboard" and similar requests mean `monk.scope.bind`. For a new project,
+  pass `projectSlug` (default: the directory name, lowercase-dashed) and
+  `createProject: true`; for a named existing project, pass that
+  `projectSlug` without `createProject`. A plain local deploy does not create
+  any dashboard records on its own; only a bind does.
 - List available owners and projects from `monk://account/scopes`. Bind with
   `monk.scope.bind`: `ownerKind: "personal"`, or `ownerKind: "org"` with
   `orgSlug`; optionally `projectSlug`, `createProject: true` to create a missing
@@ -281,6 +289,10 @@ open the required approval flow when needed.
   Use `monk.workload.stop`, `monk.workload.delete`/`purge`, and
   `monk.workload.unload`; they open feed approvals themselves. Never target
   Monk-managed `system/*` workloads.
+- Blobs a MANIFEST's `BLOBS` uploaded stay on the cluster after its workloads
+  are deleted and unloaded. `monk.blob.list` shows them; `monk.blob.delete`
+  removes one after dashboard approval. Delete a blob only when nothing still
+  mounts it.
 - Use `monk.workload.logs` for bounded log tails or short bounded follow
   windows. Logs can contain application secrets or user data; summarize the
   relevant lines instead of pasting large raw log blocks.
@@ -416,6 +428,21 @@ For a first deploy:
 7. If deploying to cloud or making a risky change, request approval.
 8. Deploy with `monk.project.deploy`.
 9. Verify the returned endpoint/status from outside the deploy operation.
+   Deploy returns once the workload starts, without waiting for readiness:
+   check `ready` in `monk.workload.status`, re-check a few times while
+   `alive: true, ready: false`, and if it never turns ready read
+   `monk.workload.logs` and report "deployed but not ready", not success.
+10. If the deploy result carries `linkOffer`, the workspace is not linked to a
+    Monk project, so the deploy does not show in the Monk dashboard. After
+    reporting the deploy, ask the user once: "Want me to link this repo to a
+    Monk project so it shows in your dashboard?" Offer it, never force it, and
+    do not ask again if they decline. On yes, call `monk.scope.bind` with
+    `linkOffer.args` (`projectSlug` defaults to the directory name,
+    lowercase-dashed; use a name the user gives instead) and
+    `createProject: true`. If `linkOffer.owners` lists more than one owner,
+    ask which one first and pass `confirmedByUser: true`. If the deploy
+    finished in the background (you polled `monk.action.status`) and
+    `monk.scope.status` reports `unbound`, make the same offer once.
 
 Monk usually deploys projects in 20-40 minutes. Set that expectation when
 starting a deploy, while still reporting concrete progress and any project- or

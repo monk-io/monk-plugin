@@ -32,7 +32,7 @@ output="$(
     trap cleanup EXIT HUP INT TERM
     uname() { printf "%s\n" Linux; }
     curl() { return 7; }
-    setsid() { /bin/sleep 1000; }
+    setsid() { [ "$1" = true ] && return 0; /bin/sleep 1000; }
     sleep() {
       sleep_calls=$((sleep_calls + 1))
       /bin/sleep "$1"

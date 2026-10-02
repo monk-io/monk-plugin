@@ -1,26 +1,34 @@
 #!/usr/bin/env sh
 # PostToolUse hook for MANIFEST/MonkScript edits.
-# Runs monk-agent analyzer diagnostics after file edits and logs results to
-# stderr. Antigravity PostToolUse stdout must be an empty JSON object — results
-# cannot be injected back into the conversation from this event type.
+# Asks local monk-agent for analyzer diagnostics and feeds concise results back
+# into the coding agent after template edits.
 #
-# Antigravity PostToolUse I/O:
-#   stdin:  {"stepIdx":N,"transcriptPath":"...","workspacePaths":[...],...}
-#   stdout: {}
-#
-# All logic lives in `monk-agent hook diagnostics`, so this wrapper depends only
-# on the binary the plugin already installs — no jq/curl/awk. Best-effort: if the
-# binary is missing we still emit {} and exit 0 so the edit is never blocked.
+# All logic (path resolution, workspace discovery, the MCP call, and formatting)
+# lives in `monk-agent hook diagnostics`, so this wrapper depends only on the
+# binary the plugin already installs — no jq/curl/awk. The hook is best-effort:
+# a missing binary, missing agent, auth issues, or unavailable analyzer support
+# must never block the user's edit, so we always exit 0.
 
 set -eu
+
+# Output shape: "claude" (default, also Cursor) emits a superset; "codex" emits
+# ONLY the documented PostToolUse fields (Codex drops output with any unknown
+# top-level key). The Codex hook passes `--format codex`; others use the default.
+# "antigravity" must print `{}` on stdout whatever happens (its PostToolUse
+# contract), so every exit below goes through done_hook.
+fmt="claude"
+if [ "${1:-}" = "--format" ] && [ -n "${2:-}" ]; then fmt="$2"; fi
+done_hook() {
+  if [ "$fmt" = "antigravity" ] && [ "${1:-}" != "answered" ]; then printf '%s\n' "{}"; fi
+  exit 0
+}
 
 # On Windows the .ps1 sibling owns this hook. A host may spawn .sh hooks in an
 # interactive git-bash window (e.g. Cursor on Windows) whose stdin is a TTY,
 # where `cat` would block forever. Bow out on Windows-flavored bash, or whenever
-# stdin is not a pipe, so we never hang and never double up with the .ps1. Still
-# emit the required empty JSON object on stdout.
-case "$(uname -s 2>/dev/null)" in MINGW* | MSYS* | CYGWIN*) printf '%s\n' "{}"; exit 0 ;; esac
-if [ -t 0 ]; then printf '%s\n' "{}"; exit 0; fi
+# stdin is not a pipe, so we never hang and never double up with the .ps1.
+case "$(uname -s 2>/dev/null)" in MINGW* | MSYS* | CYGWIN*) done_hook ;; esac
+if [ -t 0 ]; then done_hook; fi
 
 # Buffer the payload before the helper is backgrounded below. POSIX requires a
 # shell with job control disabled (i.e. every non-interactive hook invocation)
@@ -35,12 +43,15 @@ if [ -t 0 ]; then printf '%s\n' "{}"; exit 0; fi
 # is the same shape block-monk.sh already uses -- and why block-monk kept
 # working through the same incident.
 input="$(cat)"
+# Codex runs this after every shell command too; skip any payload that can't
+# name a Monk file before paying for the helper's startup. Antigravity's
+# payload is resolved through its transcript, so it can't be pre-filtered.
+if [ "$fmt" != "antigravity" ]; then
+  case "$input" in *MANIFEST* | *.yaml* | *.yml*) ;; *) done_hook ;; esac
+fi
 
 agent="${MONK_AGENT_PATH:-${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent}"
-if [ ! -x "$agent" ]; then
-  printf '%s\n' "{}"
-  exit 0
-fi
+[ -x "$agent" ] || done_hook
 
 # A wedged (not merely failing) helper must not block the edit indefinitely:
 # background it under a watchdog that TERMs then KILLs it after
@@ -52,19 +63,22 @@ fi
 # real, still-in-flight analyzer responses before they ever came back, so a
 # working call was silently discarded exactly like a genuinely wedged one.
 # 20s leaves the watchdog's own TERM/KILL grace (~1s) safely inside the 30s
-# budget while giving a slow-but-healthy call real room to finish. The
-# handler prints diagnostics to stderr and the required {} to stdout;
-# timeout/failure still needs the required {} on stdout.
+# budget while giving a slow-but-healthy call real room to finish.
 timeout_ms="${MONK_AGENT_HOOK_TIMEOUT_MS:-20000}"
 timeout_s=$(((timeout_ms + 999) / 1000))
-printf '%s' "$input" | "$agent" hook diagnostics --format antigravity &
+printf '%s' "$input" | "$agent" hook diagnostics --format "$fmt" &
 helper_pid=$!
-(sleep "$timeout_s"; kill -TERM "$helper_pid" 2>/dev/null; sleep 1; kill -KILL "$helper_pid" 2>/dev/null) &
+# The watchdog must not hold the hook's stdio: killing it below does not kill
+# its in-flight `sleep`, which would keep stdout/stderr open after the hook
+# exits, so a host that waits for EOF stalls until the sleep ends (Antigravity
+# gives up with "WaitDelay expired before I/O complete" and fails the tool
+# call -- seen live with agy 1.2.14, 2026-10-02).
+(sleep "$timeout_s"; kill -TERM "$helper_pid" 2>/dev/null; sleep 1; kill -KILL "$helper_pid" 2>/dev/null) </dev/null >/dev/null 2>&1 &
 watchdog_pid=$!
-if ! wait "$helper_pid" 2>/dev/null; then
-  printf '%s\n' "{}"
-fi
+# The helper prints Antigravity's {} itself; a wedged or failed one didn't.
+helper_status=answered
+wait "$helper_pid" 2>/dev/null || helper_status=failed
 kill "$watchdog_pid" 2>/dev/null || true
 wait "$watchdog_pid" 2>/dev/null || true
 
-exit 0
+done_hook "$helper_status"

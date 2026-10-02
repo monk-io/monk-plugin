@@ -73,7 +73,9 @@ For workload lifecycle cleanup, use `monk.workload.status` to inspect first,
 then `monk.workload.stop`, `monk.workload.delete`/`purge`, or
 `monk.workload.unload`. `stop` preserves runnable state; `delete`/`purge`
 removes runnable/container state; `unload` removes the loaded template
-definition. Do not operate on Monk-managed `system/*` workloads.
+definition. Do not operate on Monk-managed `system/*` workloads. Blobs a
+MANIFEST uploaded outlive that cleanup: `monk.blob.list` shows them and
+`monk.blob.delete` removes one after approval, once nothing mounts it.
 
 Long-running cluster/deploy/configure calls (`monk.cluster.create`/`grow`/
 `delete`, `monk.project.deploy`/`configure`, etc.) may return
@@ -87,8 +89,9 @@ exists). If the call instead surfaces a raw client-side timeout error with no
 `monk.cluster.list`/`status` (or retry the same call, per the "do not
 re-provision under a new name" guidance) before assuming it failed. Never fall
 back to shell/local-file inspection to recover state that a `monk.*` tool
-should provide (e.g. a cluster's `monkcode`, which `monk.cluster.create` and
-`monk.cluster.bind` both return directly).
+should provide. Never try to obtain a cluster's `monkcode` or any other
+cluster credential: no `monk.*` tool returns them, the tools that need them
+use them internally, and the user can copy a monkcode from the dashboard.
 
 Credential-backed SaaS targets currently include Netlify, Auth0, Redis Cloud,
 MongoDB Atlas, GitHub, Vercel, Slack, Stripe, Cloudflare, Neon, and

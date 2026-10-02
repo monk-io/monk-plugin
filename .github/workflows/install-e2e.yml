@@ -85,6 +85,10 @@ jobs:
         shell: bash
         run: ./tests/ensure-monk-agent-lock-timeout.sh
 
+      - name: Check launchers with present-but-broken shasum/setsid
+        shell: bash
+        run: ./tests/start-monk-agent-snap-tools.sh
+
       - name: Check custom agent path handoff
         shell: bash
         run: ./tests/start-monk-agent-path-handoff.sh

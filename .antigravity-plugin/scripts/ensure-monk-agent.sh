@@ -24,6 +24,9 @@ auto_update="${MONK_AGENT_AUTO_UPDATE:-1}"
 download_connect_timeout="${MONK_AGENT_DOWNLOAD_CONNECT_TIMEOUT:-15}"
 download_stall_timeout="${MONK_AGENT_DOWNLOAD_STALL_TIMEOUT:-30}"
 target="$install_dir/monk-agent"
+# Line 1: the installed archive's sha256 and name, to tell when there's nothing new.
+# Line 2: the installed binary's own sha256, for the offline fallback below. An
+# install made before line 2 existed falls back only if line 1 happens to match.
 checksum_installed="$install_dir/monk-agent.sha256"
 
 os="$(uname -s)"
@@ -44,15 +47,89 @@ case "$os:$arch" in
 esac
 
 url="$download_base/$platform_path/$artifact"
-checksum_url="$url.sha256"
+# The signed release list: a `signature:` line, then every archive's sha256
+# (scripts/sign_release_manifest.sh). It replaces trusting the `.sha256` file
+# next to the archive, which whoever can change the archive can change too.
+checksum_url="$download_base/checksums.signed.txt"
 archive_tmp="$install_dir/.monk-agent.tmp.$$.tar.gz"
-checksum_tmp="$install_dir/.monk-agent.tmp.$$.sha256"
+checksum_tmp="$install_dir/.monk-agent.tmp.$$.signed"
+list_tmp="$install_dir/.monk-agent.tmp.$$.list"
+sig_tmp="$install_dir/.monk-agent.tmp.$$.sig"
+key_tmp="$install_dir/.monk-agent.tmp.$$.pem"
 extract_dir="$install_dir/.monk-agent.extract.$$"
 lock_file="$install_dir/.monk-agent.lock"
 mkdir -p "$install_dir"
 
+# Prints a file's SHA-256, or nothing. A tool that exists but can't run (inside a
+# strictly confined snap, `shasum` is present but its Perl interpreter isn't)
+# must fall through to the next one, so each result is checked, not just the
+# tool's presence. sha256sum (coreutils) goes first as the most portable.
+sha256_of() {
+  for tool in sha256sum shasum openssl; do
+    command -v "$tool" >/dev/null 2>&1 || continue
+    case "$tool" in
+      sha256sum) digest="$(sha256sum "$1" 2>/dev/null | awk '{print $1}')" ;;
+      shasum) digest="$(shasum -a 256 "$1" 2>/dev/null | awk '{print $1}')" ;;
+      openssl) digest="$(openssl dgst -sha256 "$1" 2>/dev/null | awk '{print $NF}')" ;;
+    esac
+    case "$digest" in
+      *[!0-9a-fA-F]*|'') continue ;;
+    esac
+    if [ "${#digest}" -eq 64 ]; then
+      printf '%s\n' "$digest"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# The public half of the key Monk releases are signed with (keys/monk-release.pub.pem).
+# Carried here rather than downloaded, so the download host can't swap it.
+# @monk-release-key-begin
+release_key_pem='-----BEGIN PUBLIC KEY-----
+MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAqZvBwFF2qcg8QgQQdPFD
+adR5dB0X+BcMSQmn/kz6liUAUiM93jK3Is+GOzTxGJT86PZXzo0E0NjLCCDvp9TR
+AyHm4umRh/xUI6mA97LMOPTDau3sMzKiK/At+ijmgwS5Md7KPhNY8/tGtF9/iRcV
+qQZ2k7fKtQ6RcUmXU30I/SNr0E/iJ8dDLxc7L6sPfbrV2qBNF08u06KysKnWwykw
+7lJOkNcJFbWtN6op7r+Rq2lB6kHtnB6gjY1voRiUZWfWEHl2A5lKLVwQNh8MpGmt
+85FBD58alUJOTXumIej7qz9IxWEi/vHjZfKDLrd9N9BH09MzzQGWnucZcgbUc5eN
+4vMwkRW5VjWINb/cKKZ9vaADvXB+TI5Liu5lxIlaQAaxwVHzHe00Br+swZDmNK1C
+M4bw4p9OecMBeNBpYvyfEvnqq2m9WHMEt0NnMppvPwAjnGxp6isghQDacB9arYHD
+N/Urk4xWqRLWntpERA0/FKLQAA09Nkk/ut/sOmBmOYiHAgMBAAE=
+-----END PUBLIC KEY-----'
+# @monk-release-key-end
+
+# Prints the sha256 the signed release list gives for $artifact. Fails, saying
+# why, if the list isn't signed by Monk's key or doesn't name the artifact.
+verified_digest() {
+  header="$(head -n 1 "$1")"
+  case "$header" in
+    "signature: "*) ;;
+    *) echo "The Monk release list is not signed." >&2; return 1 ;;
+  esac
+  tail -n +2 "$1" >"$list_tmp"
+  # openssl can be present but unable to run (inside a strictly confined snap),
+  # which is the same as absent here, not a bad signature.
+  if command -v openssl >/dev/null 2>&1 && openssl version >/dev/null 2>&1; then
+    printf '%s\n' "$release_key_pem" >"$key_tmp"
+    if ! printf '%s' "${header#signature: }" | openssl base64 -d -A >"$sig_tmp" 2>/dev/null ||
+       ! openssl dgst -sha256 -verify "$key_tmp" -signature "$sig_tmp" "$list_tmp" >/dev/null 2>&1; then
+      echo "The Monk release list is not signed by Monk's release key; not installing from it." >&2
+      return 1
+    fi
+  else
+    echo "Warning: openssl is not available, so the release signature can't be checked; using the checksum alone." >&2
+  fi
+  digest="$(awk -v name="$artifact" '$2 == name { print $1; exit }' "$list_tmp")"
+  case "$digest" in
+    *[!0-9a-fA-F]*|'') echo "The Monk release list does not include $artifact." >&2; return 1 ;;
+  esac
+  [ "${#digest}" -eq 64 ] || { echo "The Monk release list has no valid checksum for $artifact." >&2; return 1; }
+  printf '%s\n' "$digest"
+}
+
 cleanup() {
-  rm -rf "$extract_dir" "$archive_tmp" "$checksum_tmp"
+  rm -rf "$extract_dir" "$archive_tmp" "$checksum_tmp" "$list_tmp" "$sig_tmp" "$key_tmp"
 }
 trap cleanup EXIT
 
@@ -105,19 +182,17 @@ download_checksum() {
   fi
 }
 
-# A transient failure fetching the update-check sidecar must not abort a cold
-# start when a previously-verified local binary is already installed
-# (ENG-422) -- only fall back when that binary's hash still matches the
-# checksum recorded at install time.
-if ! download_checksum; then
+# A transient failure fetching the release list, or a list that fails its
+# signature check, must not abort a cold start when a previously-verified local
+# binary is already installed (ENG-422) -- only fall back when that binary's
+# hash still matches the checksum recorded at install time. Nothing new is
+# installed from an unverified list.
+if ! download_checksum || ! expected="$(verified_digest "$checksum_tmp")"; then
   if [ -x "$target" ] && [ -s "$target" ] && [ -f "$checksum_installed" ]; then
-    installed="$(awk '{print $1}' "$checksum_installed")"
-    actual_installed=""
-    if command -v shasum >/dev/null 2>&1; then
-      actual_installed="$(shasum -a 256 "$target" | awk '{print $1}')"
-    elif command -v sha256sum >/dev/null 2>&1; then
-      actual_installed="$(sha256sum "$target" | awk '{print $1}')"
-    fi
+    # The binary's own hash (line 2), not the archive's: comparing the archive
+    # hash with the binary meant this fallback never matched after an install.
+    installed="$(awk 'NR == 1 { first = $1 } NR == 2 { second = $1 } END { print (second != "" ? second : first) }' "$checksum_installed")"
+    actual_installed="$(sha256_of "$target" || true)"
     case "$installed" in
       *[!0-9a-fA-F]*|'') ;;
       *)
@@ -135,10 +210,8 @@ if ! download_checksum; then
   exit 1
 fi
 
-expected="$(awk '{print $1}' "$checksum_tmp")"
-
 if [ -x "$target" ] && [ -s "$target" ] && [ -f "$checksum_installed" ]; then
-  installed="$(awk '{print $1}' "$checksum_installed")"
+  installed="$(awk 'NR == 1 { print $1 }' "$checksum_installed")"
   if [ "$installed" = "$expected" ]; then
     rm -f "$checksum_tmp"
     printf '%s\n' "$target"
@@ -155,12 +228,8 @@ elif command -v wget >/dev/null 2>&1; then
   wget -O "$archive_tmp" -t 1 -T "$download_stall_timeout" "$url"
 fi
 
-if command -v shasum >/dev/null 2>&1; then
-  actual="$(shasum -a 256 "$archive_tmp" | awk '{print $1}')"
-elif command -v sha256sum >/dev/null 2>&1; then
-  actual="$(sha256sum "$archive_tmp" | awk '{print $1}')"
-else
-  echo "shasum or sha256sum is required to verify monk-agent." >&2
+if ! actual="$(sha256_of "$archive_tmp")"; then
+  echo "sha256sum, shasum or openssl is required to verify monk-agent." >&2
   exit 2
 fi
 
@@ -174,5 +243,5 @@ mkdir -p "$extract_dir"
 tar -xzf "$archive_tmp" -C "$extract_dir"
 chmod 0755 "$extract_dir/monk-agent"
 mv "$extract_dir/monk-agent" "$target"
-printf '%s  %s\n' "$expected" "$artifact" >"$checksum_installed"
+printf '%s  %s\n%s  monk-agent\n' "$expected" "$artifact" "$(sha256_of "$target" || true)" >"$checksum_installed"
 printf '%s\n' "$target"

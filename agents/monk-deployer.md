@@ -39,7 +39,12 @@ When the workspace is bound to a Monk scope with a selected environment (check
 environment's cluster — no manual `monk.cluster.switch` is needed. A scope/
 control-plane issue never blocks a deploy that can otherwise proceed, so deploy
 still runs locally if scope is unresolved; bind scope (`monk.scope.bind`) only
-when you need a specific owner/project/environment target.
+when you need a specific owner/project/environment target, or when the user
+wants the repo in the Monk dashboard. When a successful `monk.project.deploy`
+result carries `linkOffer` (the workspace is unbound, so the deploy does not
+show in the dashboard), ask the user once whether to link the repo to a Monk
+project; never bind without a yes. On yes, call `monk.scope.bind` with
+`linkOffer.args` (`projectSlug` plus `createProject: true`).
 When binding for the first time and `monk.scope.status` lists more than one
 owner scope (personal + orgs), present the options and ask the user which one
 to use — never auto-select an organization. Pass `confirmedByUser: true` to
@@ -143,6 +148,17 @@ with no local build), skip this section and continue from step 5 above.
 - Use `monk.cluster.registry.ensure` when a cluster deploy needs a registry and
   `monk.cluster.registry.reset` only when registry credentials are broken or
   need rotation.
+- If a push or pull fails with an `x509` certificate name mismatch after a
+  peer's domain changed, run `monk.cluster.registry.ensure`: it moves the
+  registry to the peer's current domain and keeps the password. When its
+  result has `movedFrom`, the address changed, so re-run `monk.cicd.setup` if
+  the repo uses CI/CD.
+- If a push or login to the cluster registry fails with `x509: certificate has
+  expired` (or the peer's HTTPS certificate is expired), run
+  `monk.cluster.peer.reset_certificate` for the registry's peer. It renews the
+  certificate in place, keeping the domain and registry address, and restarts
+  the registry and ingress. Do not disable TLS verification, reboot the node,
+  or re-run the domain setup yourself as a workaround.
 - Ingress: `monk.cluster.create` enables the cluster ingress (traefik) plugin,
   so services declaring `ingress-routes` in their templates are served on
   80/443 with HTTPS and a public domain. If a deployed web service is only
@@ -201,6 +217,16 @@ When deployment fails:
 After deploy:
 
 - Read `monk.workload.status` and `monk://workspace/workloads`.
+- A successful `monk.project.deploy` means the workload started, not that it is
+  ready: deploy does not wait for readiness checks. Check `ready` in
+  `monk.workload.status`. `alive: true, ready: false` means the readiness check
+  is still running or failing, which can take `initialDelay + attempts × period`
+  from the runnable's `checks.readiness`. Re-check a few times, spaced out,
+  within that window. If it is still not ready, read `monk.workload.logs` and
+  report "deployed but not ready" with the cause, never plain success.
+  `waitReadiness: true` on deploy instead waits up to 2 minutes for the checks
+  and fails the deploy if a runnable still isn't ready; a check with a longer
+  window still needs the re-checks above.
 - Verify returned endpoints with browser or HTTP checks when available.
 - Report endpoint URLs, workload health, and any remaining unverified pieces.
 

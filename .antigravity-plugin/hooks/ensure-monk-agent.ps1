@@ -9,44 +9,14 @@
 
 $ErrorActionPreference = "SilentlyContinue"
 
-# Drain stdin so Antigravity's writer never blocks, even though we ignore it.
-[Console]::In.ReadToEnd() | Out-Null
+# Drain stdin so Antigravity's writer never blocks; the warm path reads the
+# conversation id from it.
+$Payload = [Console]::In.ReadToEnd()
 
-# If a usable bash is available the .sh sibling handles this; bow out silently
-# so the two hooks never both emit JSON (Antigravity runs every hook in the
-# list). Command presence alone is insufficient: Windows can expose the legacy
-# WSL bash.exe launcher even when no distro contains /bin/bash, in which case
-# the POSIX sibling cannot run and this native hook still needs to handle the
-# invocation.
-$BashUsable = $false
-$BashCommand = Get-Command bash -ErrorAction SilentlyContinue
-if ($BashCommand -and $BashCommand.CommandType -eq "Application") {
-  $BashProbe = New-Object System.Diagnostics.Process
-  try {
-    $BashProbe.StartInfo.FileName = $BashCommand.Source
-    $BashProbe.StartInfo.Arguments = '-lc "exit 0"'
-    $BashProbe.StartInfo.UseShellExecute = $false
-    $BashProbe.StartInfo.RedirectStandardOutput = $true
-    $BashProbe.StartInfo.RedirectStandardError = $true
-    $BashProbe.StartInfo.CreateNoWindow = $true
-    if ($BashProbe.Start()) {
-      # Drain redirected streams asynchronously so a broken launcher cannot
-      # block while reporting its own startup failure.
-      $null = $BashProbe.StandardOutput.ReadToEndAsync()
-      $null = $BashProbe.StandardError.ReadToEndAsync()
-      if ($BashProbe.WaitForExit(2000)) {
-        $BashUsable = $BashProbe.ExitCode -eq 0
-      } else {
-        $BashProbe.Kill()
-      }
-    }
-  } catch {
-    $BashUsable = $false
-  } finally {
-    $BashProbe.Dispose()
-  }
-}
-if ($BashUsable) { exit 0 }
+# No bash bow-out: hooks.json runs this script through one cross-platform
+# command (see antigravityHookCommand in plugin/src/metadata.ts) whose `.sh`
+# half only runs where this PowerShell half cannot, so on Windows this script
+# is the only thing that starts monk-agent, Git Bash or WSL installed or not.
 
 $Port = if ($env:MONK_AGENT_PORT) { $env:MONK_AGENT_PORT } else { "7419" }
 $AgentHost = if ($env:MONK_AGENT_HOST) { $env:MONK_AGENT_HOST } else { "127.0.0.1" }
@@ -97,6 +67,28 @@ function Test-AgentRunning {
 # only on the cold-start paths below (install-needed / (re)start), which is the
 # meaningful "launcher started" signal for Antigravity.
 if (Test-AgentRunning) {
+  # Deliver what monk-diagnostics left for this conversation, if anything:
+  # Antigravity's PostToolUse hook must answer {}, so the binary writes a
+  # ready-made PreInvocation answer to <home>\agent\hook-notices\<id>.json
+  # (see saveAntigravityNotice in src/hooks/cli.ts). Claimed with an atomic
+  # rename so a concurrent invocation never prints it twice.
+  try {
+    $Conversation = ($Payload | ConvertFrom-Json).conversationId
+    if ($Conversation -is [string] -and $Conversation -match '^[A-Za-z0-9_-]{1,128}$') {
+      $MonkHomeDir = if ($env:MONK_AGENT_HOME) { $env:MONK_AGENT_HOME } else { Join-Path $HOME ".monk" }
+      $Notice = Join-Path $MonkHomeDir "agent\hook-notices\$Conversation.json"
+      if (Test-Path -LiteralPath $Notice) {
+        $Claimed = "$Notice.claimed-$PID"
+        Move-Item -LiteralPath $Notice -Destination $Claimed -ErrorAction Stop
+        $Text = Get-Content -Raw -Encoding UTF8 -LiteralPath $Claimed
+        Remove-Item -LiteralPath $Claimed -Force
+        if ($Text) {
+          Write-Output $Text.Trim()
+          exit 0
+        }
+      }
+    }
+  } catch {}
   Write-Output "{}"
   exit 0
 }

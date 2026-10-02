@@ -258,14 +258,24 @@ hash_file() {
     printf '\n'
     return
   fi
-  if command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$path" | awk '{print $1}'
-    return
-  fi
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$path" | awk '{print $1}'
-    return
-  fi
+  # A tool can exist and still fail to run (inside a strictly confined snap,
+  # `shasum` is present but its Perl interpreter isn't), so each result is
+  # checked rather than trusting the first tool found.
+  for tool in sha256sum shasum openssl; do
+    command -v "$tool" >/dev/null 2>&1 || continue
+    case "$tool" in
+      sha256sum) digest="$(sha256sum "$path" 2>/dev/null | awk '{print $1}')" ;;
+      shasum) digest="$(shasum -a 256 "$path" 2>/dev/null | awk '{print $1}')" ;;
+      openssl) digest="$(openssl dgst -sha256 "$path" 2>/dev/null | awk '{print $NF}')" ;;
+    esac
+    case "$digest" in
+      *[!0-9a-fA-F]*|'') continue ;;
+    esac
+    if [ "${#digest}" -eq 64 ]; then
+      printf '%s\n' "$digest"
+      return
+    fi
+  done
   printf '\n'
 }
 
@@ -354,6 +364,29 @@ raise_fd_limit() {
   ulimit -n "$agent_fd_limit" 2>/dev/null || ulimit -n "$(ulimit -Hn 2>/dev/null)" 2>/dev/null || true
 }
 
+# Prints the newer of two plugin versions ($1 recorded, $2 this plugin's), or
+# this plugin's when either is not a plain dotted number (a dev build).
+newer_plugin_version() {
+  [ -n "$1" ] || { printf '%s' "$2"; return 0; }
+  [ -n "$2" ] || { printf '%s' "$1"; return 0; }
+  case "$1$2" in
+    *[!0-9.]*) printf '%s' "$2"; return 0 ;;
+  esac
+  printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1
+}
+
+# One agent can be launched by several Monk plugins at once: Cursor runs its
+# own plugin's hooks and Claude Code's, which ship on different schedules. If
+# each restarted the agent whenever the recorded MONK_PLUGIN_VERSION differed
+# from its own, they would take turns restarting it on every session start,
+# each restart waiting out launchd's throttle. So the recorded version only
+# moves forward: a newer plugin restarts the agent once to report itself (the
+# ENG-490 intent), an older one leaves it alone.
+if [ "$os" = "Darwin" ] && [ -f "$launchd_plist" ]; then
+  recorded_plugin_version="$(sed -n '/<key>MONK_PLUGIN_VERSION<\/key>/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' "$launchd_plist" 2>/dev/null || true)"
+  MONK_PLUGIN_VERSION="$(newer_plugin_version "$recorded_plugin_version" "${MONK_PLUGIN_VERSION:-}")"
+fi
+
 launchd_configured() {
   # Deliberately excludes PATH: it is derived from the invoking shell/app and
   # legitimately differs across hosts (Claude Code, VS Code, plain terminal) and
@@ -438,11 +471,13 @@ start_with_launchd() {
     <key>SuccessfulExit</key>
     <false/>
   </dict>
-  <!-- launchd's default throttle floor is 10s; widen it so an unrecoverable
-       failure (e.g. a foreign process pinning the port) costs ~1 relaunch/min
-       instead of ~6, while still self-healing once the port frees. -->
+  <!-- launchd's floor. It also delays a deliberate restart (bootout, then
+       bootstrap) that comes soon after the previous start: at 60s that left
+       nothing on the port for a minute whenever two launchers ran back to
+       back. A foreign process pinning the port now costs ~6 relaunches/min
+       instead of 1, each exiting at once on the bind error. -->
   <key>ThrottleInterval</key>
-  <integer>60</integer>
+  <integer>10</integer>
   <key>SoftResourceLimits</key>
   <dict>
     <key>NumberOfFiles</key>
@@ -520,7 +555,9 @@ start_with_background_process() {
   export MONK_PLUGIN_VERSION="${MONK_PLUGIN_VERSION:-}"
   export MONK_AGENT_LAUNCH_CLIENT="$client"
   raise_fd_limit
-  if command -v setsid >/dev/null 2>&1; then
+  # Probe setsid rather than trusting its presence: a strictly confined snap
+  # ships the binary but refuses it, and a refused setsid would leave no agent.
+  if command -v setsid >/dev/null 2>&1 && setsid true </dev/null >/dev/null 2>&1; then
     setsid "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &
   elif command -v nohup >/dev/null 2>&1; then
     nohup "$agent_path" serve --host "$host" --port "$port" >>"$log_file" 2>&1 </dev/null &

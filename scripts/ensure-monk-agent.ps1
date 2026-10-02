@@ -108,6 +108,56 @@ function Invoke-FileDownload {
   }
 }
 
+# The public half of the key Monk releases are signed with (keys/monk-release.pub.pem),
+# as RSA modulus and exponent: .NET Framework, which Windows PowerShell 5.1 runs on,
+# can't read a PEM. Carried here rather than downloaded, so the download host can't
+# swap it.
+# @monk-release-key-begin
+$MonkReleaseKeyModulus = "qZvBwFF2qcg8QgQQdPFDadR5dB0X+BcMSQmn/kz6liUAUiM93jK3Is+GOzTxGJT86PZXzo0E0NjLCCDvp9TRAyHm4umRh/xUI6mA97LMOPTDau3sMzKiK/At+ijmgwS5Md7KPhNY8/tGtF9/iRcVqQZ2k7fKtQ6RcUmXU30I/SNr0E/iJ8dDLxc7L6sPfbrV2qBNF08u06KysKnWwykw7lJOkNcJFbWtN6op7r+Rq2lB6kHtnB6gjY1voRiUZWfWEHl2A5lKLVwQNh8MpGmt85FBD58alUJOTXumIej7qz9IxWEi/vHjZfKDLrd9N9BH09MzzQGWnucZcgbUc5eN4vMwkRW5VjWINb/cKKZ9vaADvXB+TI5Liu5lxIlaQAaxwVHzHe00Br+swZDmNK1CM4bw4p9OecMBeNBpYvyfEvnqq2m9WHMEt0NnMppvPwAjnGxp6isghQDacB9arYHDN/Urk4xWqRLWntpERA0/FKLQAA09Nkk/ut/sOmBmOYiH"
+$MonkReleaseKeyExponent = "AQAB"
+# @monk-release-key-end
+
+# Returns the sha256 the signed release list gives for $Name. Throws, saying why, if
+# the list isn't signed by Monk's key or doesn't name the archive. Works on the raw
+# bytes: the signature covers everything after the first line exactly as served.
+function Get-VerifiedDigest {
+  param([string]$Path, [string]$Name)
+  $Bytes = [System.IO.File]::ReadAllBytes($Path)
+  $Newline = [Array]::IndexOf($Bytes, [byte]10)
+  $Header = if ($Newline -gt 0) { [System.Text.Encoding]::ASCII.GetString($Bytes, 0, $Newline).Trim() } else { "" }
+  if (-not $Header.StartsWith("signature: ")) {
+    throw "The Monk release list is not signed."
+  }
+  $Body = New-Object byte[] ($Bytes.Length - $Newline - 1)
+  [Array]::Copy($Bytes, $Newline + 1, $Body, 0, $Body.Length)
+
+  $Valid = $false
+  $Rsa = New-Object System.Security.Cryptography.RSACryptoServiceProvider
+  try {
+    $Key = New-Object System.Security.Cryptography.RSAParameters
+    $Key.Modulus = [Convert]::FromBase64String($MonkReleaseKeyModulus)
+    $Key.Exponent = [Convert]::FromBase64String($MonkReleaseKeyExponent)
+    $Rsa.ImportParameters($Key)
+    $Signature = [Convert]::FromBase64String($Header.Substring(11))
+    $Valid = $Rsa.VerifyData($Body, "SHA256", $Signature)
+  } catch {
+    $Valid = $false
+  } finally {
+    $Rsa.Dispose()
+  }
+  if (-not $Valid) {
+    throw "The Monk release list is not signed by Monk's release key; not installing from it."
+  }
+
+  foreach ($Line in ([System.Text.Encoding]::UTF8.GetString($Body) -split "`n")) {
+    $Fields = $Line.Trim() -split "\s+"
+    if ($Fields.Count -eq 2 -and $Fields[1] -eq $Name -and $Fields[0] -match "^[0-9a-fA-F]{64}$") {
+      return $Fields[0].ToLowerInvariant()
+    }
+  }
+  throw "The Monk release list does not include $Name."
+}
+
 function Test-SameFilePath {
   param([string]$Actual, [string]$Expected)
   if (-not $Actual -or -not $Expected) {
@@ -191,9 +241,12 @@ switch ($Arch) {
 }
 
 $Url = "$DownloadBase/windows/$Artifact"
-$ChecksumUrl = "$Url.sha256"
+# The signed release list: a `signature:` line, then every archive's sha256
+# (scripts/sign_release_manifest.sh). It replaces trusting the `.sha256` file
+# next to the archive, which whoever can change the archive can change too.
+$ChecksumUrl = "$DownloadBase/checksums.signed.txt"
 $ArchiveTmp = Join-Path $InstallDir ".monk-agent.tmp.zip"
-$ChecksumTmp = Join-Path $InstallDir ".monk-agent.tmp.sha256"
+$ChecksumTmp = Join-Path $InstallDir ".monk-agent.tmp.signed"
 $ExtractDir = Join-Path $InstallDir ".monk-agent.extract"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
@@ -228,15 +281,22 @@ try {
   try {
     Invoke-FileDownload -Uri $ChecksumUrl -OutFile $ChecksumTmp `
       -ConnectTimeoutSec $DownloadConnectTimeoutSec -StallTimeoutSec $DownloadStallTimeoutSec
+    $Expected = Get-VerifiedDigest $ChecksumTmp $Artifact
   } catch {
-    # A transient failure fetching the update-check sidecar must not abort a
-    # cold start when a previously-verified local binary is already installed
-    # (ENG-422) -- only fall back when that binary's hash still matches the
-    # checksum recorded at install time.
+    # A transient failure fetching the release list, or a list that fails its
+    # signature check, must not abort a cold start when a previously-verified
+    # local binary is already installed (ENG-422) -- only fall back when that
+    # binary's hash still matches the checksum recorded at install time.
+    # Nothing new is installed from an unverified list.
+    Write-Warning "$_"
     $Installed = ""
     if ((Test-Path $Target) -and (Test-Path $ChecksumInstalled)) {
       try {
-        $Installed = ((Get-Content -Raw $ChecksumInstalled).Trim() -split "\s+")[0].ToLowerInvariant()
+        # The binary's own hash (line 2), not the archive's: comparing the archive
+        # hash with the binary meant this fallback never matched after an install.
+        $Lines = @((Get-Content $ChecksumInstalled) | Where-Object { $_.Trim() })
+        $Line = if ($Lines.Count -ge 2) { $Lines[1] } else { $Lines[0] }
+        $Installed = (($Line.Trim()) -split "\s+")[0].ToLowerInvariant()
       } catch {
         $Installed = ""
       }
@@ -255,8 +315,6 @@ try {
 
     throw
   }
-
-  $Expected = ((Get-Content -Raw $ChecksumTmp).Trim() -split "\s+")[0].ToLowerInvariant()
 
   if ((Test-Path $Target) -and (Get-Item $Target).Length -gt 0 -and (Test-Path $ChecksumInstalled)) {
     $Installed = ((Get-Content -Raw $ChecksumInstalled).Trim() -split "\s+")[0].ToLowerInvariant()
@@ -284,7 +342,9 @@ try {
   Expand-Archive -Force -Path $ArchiveTmp -DestinationPath $ExtractDir
   Stop-ManagedAgent
   Move-Item -Force (Join-Path $ExtractDir "monk-agent.exe") $Target
-  "$Expected  $Artifact" | Set-Content -NoNewline $ChecksumInstalled
+  # Line 1: the archive's sha256 and name, to tell when there's nothing new.
+  # Line 2: the binary's own sha256, for the offline fallback above.
+  "$Expected  $Artifact`n$(Get-FileSha256 $Target)  monk-agent.exe" | Set-Content -NoNewline $ChecksumInstalled
   Remove-Item -Recurse -Force $ExtractDir
   Remove-Item -Force $ArchiveTmp, $ChecksumTmp
   Write-Output $Target

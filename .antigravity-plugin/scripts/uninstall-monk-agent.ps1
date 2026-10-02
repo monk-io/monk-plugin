@@ -218,7 +218,7 @@ function Remove-AntigravityMcp {
     return
   }
   try {
-    $Config = Get-Content -Raw $ConfigPath | ConvertFrom-Json
+    $Config = Get-Content -Raw -Encoding UTF8 $ConfigPath | ConvertFrom-Json
   } catch {
     return
   }
@@ -234,7 +234,9 @@ function Remove-AntigravityMcp {
   }
   $TempPath = "$ConfigPath.tmp-$PID"
   try {
-    $Config | ConvertTo-Json -Depth 100 | Set-Content -Encoding UTF8 $TempPath
+    # UTF-8 without a byte-order mark: Antigravity rejects a file that starts with
+    # one (see Register-AntigravityMcp in start-monk-agent.ps1).
+    [System.IO.File]::WriteAllText($TempPath, ($Config | ConvertTo-Json -Depth 100), (New-Object System.Text.UTF8Encoding $false))
     Move-Item -Force $TempPath $ConfigPath
   } finally {
     Remove-Item -Force $TempPath -ErrorAction SilentlyContinue

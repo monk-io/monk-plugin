@@ -1,7 +1,7 @@
 ---
 name: monk
 description: "Deploy and operate applications with Monk through the local monk-agent MCP companion. Use when the user wants to install Monk, sign in, analyze a project, deploy locally or to cloud, inspect workloads, provide secrets securely, or troubleshoot Monk-managed infrastructure. MVP hosts are Claude Code, Codex, and Cursor."
-allowed-tools: Bash(*), Read, WebFetch, Task, mcp__plugin_monk_monk__monk_agent_clear_state, mcp__plugin_monk_monk__monk_agent_clear_history, mcp__plugin_monk_monk__monk_auth_status, mcp__plugin_monk_monk__monk_auth_logout, mcp__plugin_monk_monk__monk_install_status, mcp__plugin_monk_monk__monk_install_run, mcp__plugin_monk_monk__monk_runtime_status, mcp__plugin_monk_monk__monk_session_init, mcp__plugin_monk_monk__monk_scope_status, mcp__plugin_monk_monk__monk_scope_bind, mcp__plugin_monk_monk__monk_scope_workspace_list, mcp__plugin_monk_monk__monk_scope_workspace_delete, mcp__plugin_monk_monk__monk_scope_project_delete, mcp__plugin_monk_monk__monk_org_usage, mcp__plugin_monk_monk__monk_org_billing_alerts_get, mcp__plugin_monk_monk__monk_org_billing_alerts_set, mcp__plugin_monk_monk__monk_account_status, mcp__plugin_monk_monk__monk_account_select, mcp__plugin_monk_monk__monk_rbac_access, mcp__plugin_monk_monk__monk_rbac_assign, mcp__plugin_monk_monk__monk_rbac_role, mcp__plugin_monk_monk__monk_project_analyze, mcp__plugin_monk_monk__monk_project_configure, mcp__plugin_monk_monk__monk_project_deploy, mcp__plugin_monk_monk__monk_project_plan, mcp__plugin_monk_monk__monk_environment_list, mcp__plugin_monk_monk__monk_environment_select, mcp__plugin_monk_monk__monk_environment_delete, mcp__plugin_monk_monk__monk_capsule_setup, mcp__plugin_monk_monk__monk_capsule_list, mcp__plugin_monk_monk__monk_capsule_secrets_update, mcp__plugin_monk_monk__monk_capsule_schedule_get, mcp__plugin_monk_monk__monk_capsule_schedule_update, mcp__plugin_monk_monk__monk_cicd_setup, mcp__plugin_monk_monk__monk_cluster_status, mcp__plugin_monk_monk__monk_cluster_peers, mcp__plugin_monk_monk__monk_cluster_providers, mcp__plugin_monk_monk__monk_cluster_list, mcp__plugin_monk_monk__monk_cluster_create, mcp__plugin_monk_monk__monk_cluster_grow, mcp__plugin_monk_monk__monk_cluster_peer_remove, mcp__plugin_monk_monk__monk_cluster_peer_tag, mcp__plugin_monk_monk__monk_cluster_peer_set_certificate, mcp__plugin_monk_monk__monk_cluster_peer_reset_certificate, mcp__plugin_monk_monk__monk_cluster_upgrade, mcp__plugin_monk_monk__monk_cluster_delete, mcp__plugin_monk_monk__monk_cluster_exit, mcp__plugin_monk_monk__monk_cluster_provider_ensure, mcp__plugin_monk_monk__monk_cluster_price, mcp__plugin_monk_monk__monk_cluster_catalog, mcp__plugin_monk_monk__monk_cluster_gpuTypes, mcp__plugin_monk_monk__monk_cluster_estimate, mcp__plugin_monk_monk__monk_cluster_ingress_status, mcp__plugin_monk_monk__monk_cluster_ingress_ensure, mcp__plugin_monk_monk__monk_cluster_ingress_list_certificates, mcp__plugin_monk_monk__monk_cluster_ingress_set_certificate, mcp__plugin_monk_monk__monk_cluster_ingress_reset_certificate, mcp__plugin_monk_monk__monk_cluster_registry_status, mcp__plugin_monk_monk__monk_cluster_registry_ensure, mcp__plugin_monk_monk__monk_cluster_registry_reset, mcp__plugin_monk_monk__monk_cluster_forget, mcp__plugin_monk_monk__monk_cluster_switch, mcp__plugin_monk_monk__monk_cluster_join, mcp__plugin_monk_monk__monk_cluster_bind, mcp__plugin_monk_monk__monk_watcher_status, mcp__plugin_monk_monk__monk_watcher_setup, mcp__plugin_monk_monk__monk_watcher_remove, mcp__plugin_monk_monk__monk_preferences_get, mcp__plugin_monk_monk__monk_preferences_set, mcp__plugin_monk_monk__monk_preferences_delete, mcp__plugin_monk_monk__monk_secret_request, mcp__plugin_monk_monk__monk_secret_list, mcp__plugin_monk_monk__monk_secret_add, mcp__plugin_monk_monk__monk_secret_remove, mcp__plugin_monk_monk__monk_secret_push, mcp__plugin_monk_monk__monk_credentials_request, mcp__plugin_monk_monk__monk_credentials_status, mcp__plugin_monk_monk__monk_credentials_delete, mcp__plugin_monk_monk__monk_workload_status, mcp__plugin_monk_monk__monk_workload_logs, mcp__plugin_monk_monk__monk_workload_stop, mcp__plugin_monk_monk__monk_workload_delete, mcp__plugin_monk_monk__monk_workload_purge, mcp__plugin_monk_monk__monk_workload_unload, mcp__plugin_monk_monk__monk_workload_actions, mcp__plugin_monk_monk__monk_workload_do, mcp__plugin_monk_monk__monk_analyzer_diagnose, mcp__plugin_monk_monk__monk_docs_search, mcp__plugin_monk_monk__monk_package_list, mcp__plugin_monk_monk__monk_package_search, mcp__plugin_monk_monk__monk_package_info, mcp__plugin_monk_monk__monk_package_dump, mcp__plugin_monk_monk__monk_dump, mcp__plugin_monk_monk__monk_arrowscript_operator_groups, mcp__plugin_monk_monk__monk_arrowscript_operator_list, mcp__plugin_monk_monk__monk_arrowscript_operator_search, mcp__plugin_monk_monk__monk_arrowscript_operator_doc, mcp__plugin_monk_monk__monk_feedback_submit, mcp__plugin_monk_monk__monk_action_status, mcp__plugin_monk_monk__monk_dashboard_open, mcp__plugin_monk_monk__monk_workload_action_trust_list, mcp__plugin_monk_monk__monk_workload_action_trust_revoke
+allowed-tools: Bash(*), Read, WebFetch, Task, mcp__plugin_monk_monk__monk_agent_clear_state, mcp__plugin_monk_monk__monk_agent_clear_history, mcp__plugin_monk_monk__monk_auth_status, mcp__plugin_monk_monk__monk_auth_logout, mcp__plugin_monk_monk__monk_install_status, mcp__plugin_monk_monk__monk_install_run, mcp__plugin_monk_monk__monk_runtime_status, mcp__plugin_monk_monk__monk_session_init, mcp__plugin_monk_monk__monk_scope_status, mcp__plugin_monk_monk__monk_scope_bind, mcp__plugin_monk_monk__monk_scope_workspace_list, mcp__plugin_monk_monk__monk_scope_workspace_delete, mcp__plugin_monk_monk__monk_scope_project_delete, mcp__plugin_monk_monk__monk_org_usage, mcp__plugin_monk_monk__monk_org_billing_alerts_get, mcp__plugin_monk_monk__monk_org_billing_alerts_set, mcp__plugin_monk_monk__monk_account_status, mcp__plugin_monk_monk__monk_account_select, mcp__plugin_monk_monk__monk_rbac_access, mcp__plugin_monk_monk__monk_rbac_assign, mcp__plugin_monk_monk__monk_rbac_role, mcp__plugin_monk_monk__monk_project_analyze, mcp__plugin_monk_monk__monk_project_configure, mcp__plugin_monk_monk__monk_project_deploy, mcp__plugin_monk_monk__monk_project_plan, mcp__plugin_monk_monk__monk_environment_list, mcp__plugin_monk_monk__monk_environment_select, mcp__plugin_monk_monk__monk_environment_delete, mcp__plugin_monk_monk__monk_capsule_setup, mcp__plugin_monk_monk__monk_capsule_list, mcp__plugin_monk_monk__monk_capsule_secrets_update, mcp__plugin_monk_monk__monk_capsule_schedule_get, mcp__plugin_monk_monk__monk_capsule_schedule_update, mcp__plugin_monk_monk__monk_cicd_setup, mcp__plugin_monk_monk__monk_cluster_status, mcp__plugin_monk_monk__monk_cluster_peers, mcp__plugin_monk_monk__monk_cluster_providers, mcp__plugin_monk_monk__monk_cluster_list, mcp__plugin_monk_monk__monk_cluster_create, mcp__plugin_monk_monk__monk_cluster_grow, mcp__plugin_monk_monk__monk_cluster_peer_remove, mcp__plugin_monk_monk__monk_cluster_peer_tag, mcp__plugin_monk_monk__monk_cluster_peer_set_certificate, mcp__plugin_monk_monk__monk_cluster_peer_reset_certificate, mcp__plugin_monk_monk__monk_cluster_upgrade, mcp__plugin_monk_monk__monk_cluster_delete, mcp__plugin_monk_monk__monk_cluster_exit, mcp__plugin_monk_monk__monk_cluster_provider_ensure, mcp__plugin_monk_monk__monk_cluster_price, mcp__plugin_monk_monk__monk_cluster_catalog, mcp__plugin_monk_monk__monk_cluster_gpuTypes, mcp__plugin_monk_monk__monk_cluster_estimate, mcp__plugin_monk_monk__monk_cluster_ingress_status, mcp__plugin_monk_monk__monk_cluster_ingress_ensure, mcp__plugin_monk_monk__monk_cluster_ingress_list_certificates, mcp__plugin_monk_monk__monk_cluster_ingress_set_certificate, mcp__plugin_monk_monk__monk_cluster_ingress_reset_certificate, mcp__plugin_monk_monk__monk_cluster_registry_status, mcp__plugin_monk_monk__monk_cluster_registry_ensure, mcp__plugin_monk_monk__monk_cluster_registry_reset, mcp__plugin_monk_monk__monk_cluster_forget, mcp__plugin_monk_monk__monk_cluster_switch, mcp__plugin_monk_monk__monk_cluster_join, mcp__plugin_monk_monk__monk_cluster_bind, mcp__plugin_monk_monk__monk_watcher_status, mcp__plugin_monk_monk__monk_watcher_setup, mcp__plugin_monk_monk__monk_watcher_remove, mcp__plugin_monk_monk__monk_preferences_get, mcp__plugin_monk_monk__monk_preferences_set, mcp__plugin_monk_monk__monk_preferences_delete, mcp__plugin_monk_monk__monk_secret_request, mcp__plugin_monk_monk__monk_secret_list, mcp__plugin_monk_monk__monk_secret_add, mcp__plugin_monk_monk__monk_secret_remove, mcp__plugin_monk_monk__monk_secret_push, mcp__plugin_monk_monk__monk_credentials_request, mcp__plugin_monk_monk__monk_credentials_status, mcp__plugin_monk_monk__monk_credentials_delete, mcp__plugin_monk_monk__monk_workload_status, mcp__plugin_monk_monk__monk_workload_logs, mcp__plugin_monk_monk__monk_workload_stop, mcp__plugin_monk_monk__monk_workload_delete, mcp__plugin_monk_monk__monk_workload_purge, mcp__plugin_monk_monk__monk_workload_unload, mcp__plugin_monk_monk__monk_workload_actions, mcp__plugin_monk_monk__monk_workload_do, mcp__plugin_monk_monk__monk_analyzer_diagnose, mcp__plugin_monk_monk__monk_docs_search, mcp__plugin_monk_monk__monk_package_list, mcp__plugin_monk_monk__monk_package_search, mcp__plugin_monk_monk__monk_package_info, mcp__plugin_monk_monk__monk_package_dump, mcp__plugin_monk_monk__monk_dump, mcp__plugin_monk_monk__monk_arrowscript_operator_groups, mcp__plugin_monk_monk__monk_arrowscript_operator_list, mcp__plugin_monk_monk__monk_arrowscript_operator_search, mcp__plugin_monk_monk__monk_arrowscript_operator_doc, mcp__plugin_monk_monk__monk_feedback_submit, mcp__plugin_monk_monk__monk_action_status, mcp__plugin_monk_monk__monk_dashboard_open, mcp__plugin_monk_monk__monk_workload_action_trust_list, mcp__plugin_monk_monk__monk_workload_action_trust_revoke, mcp__plugin_monk_monk__monk_blob_list, mcp__plugin_monk_monk__monk_blob_delete
 ---
 
 # Using Monk
@@ -65,7 +65,7 @@ Before deploying:
    - you need to override the picked root with a specific absolute path, or
    - you want to record host/client/plugin-version metadata for telemetry.
      When you do call it, pass the absolute project directory as `workspaceRoot`
-     and include `pluginVersion: "0.1.67"` so telemetry reports the
+     and include `pluginVersion: "0.1.68"` so telemetry reports the
      real plugin version.
      `monk-agent` never falls back to its own working directory.
 4. Confirm auth status with `monk.auth.status` (once the tools are available). If
@@ -206,6 +206,8 @@ Prefer `monk-agent` MCP tools and resources:
 - `monk.dashboard.open` (when the dashboard is locked, unreachable, or the user needs a working link)
 - `monk.workload.action.trust.list`
 - `monk.workload.action.trust.revoke`
+- `monk.blob.list`
+- `monk.blob.delete`
 - `monk://agent/status`
 - `monk://workspace/manifest`
 - `monk://workspace/workloads`
@@ -278,6 +280,12 @@ run.
   - `ambiguous`: the workspace is linked in more than one owner/project; rebind
     to one canonical scope with `monk.scope.bind` and `confirmMove: true`.
   - `resolved`: proceed.
+- "Link this repo to a Monk project", "show this project in my Monk
+  dashboard" and similar requests mean `monk.scope.bind`. For a new project,
+  pass `projectSlug` (default: the directory name, lowercase-dashed) and
+  `createProject: true`; for a named existing project, pass that
+  `projectSlug` without `createProject`. A plain local deploy does not create
+  any dashboard records on its own; only a bind does.
 - List available owners and projects from `monk://account/scopes`. Bind with
   `monk.scope.bind`: `ownerKind: "personal"`, or `ownerKind: "org"` with
   `orgSlug`; optionally `projectSlug`, `createProject: true` to create a missing
@@ -334,6 +342,10 @@ open the required approval flow when needed.
   Use `monk.workload.stop`, `monk.workload.delete`/`purge`, and
   `monk.workload.unload`; they open feed approvals themselves. Never target
   Monk-managed `system/*` workloads.
+- Blobs a MANIFEST's `BLOBS` uploaded stay on the cluster after its workloads
+  are deleted and unloaded. `monk.blob.list` shows them; `monk.blob.delete`
+  removes one after dashboard approval. Delete a blob only when nothing still
+  mounts it.
   When the user asks to **remove**, **delete**, or **clean up** a workload
   (including superseded workloads left behind after an inheritance-based
   redeploy), use `delete`/`purge` — no separate `stop` is needed first, as
@@ -509,6 +521,21 @@ For a first deploy:
 7. If deploying to cloud or making a risky change, request approval.
 8. Deploy with `monk.project.deploy`.
 9. Verify the returned endpoint/status from outside the deploy operation.
+   Deploy returns once the workload starts, without waiting for readiness:
+   check `ready` in `monk.workload.status`, re-check a few times while
+   `alive: true, ready: false`, and if it never turns ready read
+   `monk.workload.logs` and report "deployed but not ready", not success.
+10. If the deploy result carries `linkOffer`, the workspace is not linked to a
+    Monk project, so the deploy does not show in the Monk dashboard. After
+    reporting the deploy, ask the user once: "Want me to link this repo to a
+    Monk project so it shows in your dashboard?" Offer it, never force it, and
+    do not ask again if they decline. On yes, call `monk.scope.bind` with
+    `linkOffer.args` (`projectSlug` defaults to the directory name,
+    lowercase-dashed; use a name the user gives instead) and
+    `createProject: true`. If `linkOffer.owners` lists more than one owner,
+    ask which one first and pass `confirmedByUser: true`. If the deploy
+    finished in the background (you polled `monk.action.status`) and
+    `monk.scope.status` reports `unbound`, make the same offer once.
 
 Monk usually deploys projects in 20-40 minutes. Set that expectation when
 starting a deploy, while still reporting concrete progress and any project- or

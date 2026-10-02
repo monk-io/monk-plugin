@@ -8,7 +8,7 @@ running — on your own cloud accounts (AWS, GCP, Azure, DigitalOcean,
 Hetzner), with infrastructure, databases, networking, TLS, CI/CD, and
 monitoring handled for you.
 
-This plugin connects Claude Code, Cursor, OpenAI Codex, or Google Antigravity
+This plugin connects Claude Code, Cursor, OpenAI Codex and other coding agents
 to Monk. Once installed, you deploy and operate in plain language:
 "deploy this app", "show me the logs", "set up CI/CD", "what is this costing
 me?" — no Dockerfiles, no Terraform, no cloud consoles.
@@ -28,70 +28,84 @@ plugin opens a browser sign-in on first use.
 
 ## Installation
 
-### Claude Code
+Run this in a terminal:
+
+```bash
+curl -fsSL https://get.monk.io/stable/plugin | sh
+```
+
+On Windows, in PowerShell:
+
+```powershell
+irm https://get.monk.io/stable/plugin.ps1 | iex
+```
+
+It installs Monk, finds the coding agents on this computer, shows what it will
+change and asks before changing anything, then offers to sign you in. Run it
+again to update. Add `--dry-run` to see the plan without changing anything:
+
+```bash
+curl -fsSL https://get.monk.io/stable/plugin | sh -s -- --dry-run
+```
+
+Every download is checked against a list signed with Monk's release key.
+
+### Setting up one agent
+
+To add Monk to a single agent yourself instead:
+
+**Claude Code**
 
 ```text
 /plugin marketplace add monk-io/monk-plugin
 /plugin install monk@monk-plugins
-```
-
-To update an existing install:
-
-```text
-/plugin update monk@monk-plugins
 /reload-plugins
 ```
 
-### Cursor
+Sign in with `/mcp`, then authenticate the `monk` server. To update later:
+`/plugin update monk@monk-plugins`, then `/reload-plugins`.
 
-Install from the [Cursor marketplace](https://cursor.com/marketplace/monk-io),
-or from the command palette:
+**OpenAI Codex**
 
-```text
-/add-plugin monk
+```bash
+codex plugin marketplace add monk-io/monk-plugin
+codex plugin add monk@monk-plugins
 ```
 
-Or, pointing directly at the plugin repo:
+Restart Codex, then sign in with `codex mcp login monk`.
+
+**Cursor**
+
+Install from the [Cursor marketplace](https://cursor.com/marketplace/monk-io),
+or straight from this repository:
 
 ```text
 /add-plugin https://github.com/monk-io/monk-plugin
 ```
 
-### OpenAI Codex
+Restart Cursor, then log in to the `monk` server in Cursor's MCP settings.
 
-```text
-codex plugin marketplace add monk-io/monk-plugin
-```
-
-Then start `codex`, run `/plugins`, open the `monk-plugins` marketplace, and
-install Monk.
-
-### Google Antigravity
-
-Clone or download this repository, then copy the `.antigravity-plugin` directory
-to one of:
-
-- **Workspace** (this project only): `.agents/plugins/monk/`
-- **Global** (all workspaces): `~/.gemini/config/plugins/monk/`
+**Google Antigravity**
 
 ```bash
-cp -r .antigravity-plugin/ ~/.gemini/config/plugins/monk
-~/.gemini/config/plugins/monk/scripts/start-monk-agent.sh
+agy plugin install https://github.com/monk-io/monk-plugin/tree/main/.antigravity-plugin
 ```
 
-The second command is a one-time setup step that installs `monk-agent`, starts
-it, and registers it in `~/.gemini/config/mcp_config.json` (Antigravity reads
-MCP servers from the global config, not from the plugin directory). After that,
-`monk-agent` starts automatically via the `PreInvocation` hook at the start of
-each Antigravity conversation. To authenticate with Monk, open a project in
-Antigravity, then go to **Agent Settings → Customizations → Authenticate** next
-to the `monk` server and complete the browser sign-in.
+Restart Antigravity, then open **Agent Settings → Customizations** and choose
+**Authenticate** next to `monk`.
 
-After installation, restart or reload the host so the skill and MCP server are
-picked up. If the `monk` MCP server reports that authentication is required,
-complete the browser sign-in flow: `/mcp` in Claude Code,
-`codex mcp login monk` in Codex, Cursor's MCP login for the `monk` server, or
-**Agent Settings → Customizations → Authenticate** in Antigravity.
+**Devin**
+
+```bash
+devin plugins install -y --local monk-io/monk-plugin
+```
+
+Restart Devin, then sign in with `devin mcp login monk`.
+
+**Other agents** (VS Code, Copilot CLI, Gemini CLI, OpenCode, Kilo Code, Goose,
+Zed, Cline, Roo Code, Amp, Warp, JetBrains Junie): the installer above adds the
+`monk` MCP server to their config. To do it by hand, see
+[the agent guide](https://docs.monk.io/getting-started/agents).
 
 ## Basic usage
 
@@ -119,15 +133,15 @@ Three ways to report it:
 
 ## What gets installed
 
-On the first session the plugin bootstraps a local companion and the Monk
-runtime:
+The installer, or the plugin's first session, sets up a local companion and
+the Monk runtime:
 
 - `monk-agent` is installed to `~/.monk/bin` and serves MCP on
   `127.0.0.1:7419`. Its state lives in `~/.monk/agent`.
 - The Monk CLI and daemon (`monk`, `monkd`) are installed or upgraded with
   your package manager: Homebrew on macOS, apt or dnf on Linux, and a
   dedicated Ubuntu WSL distro on Windows.
-- This plugin requires monkd v3.21.3 or newer and prompts to
+- This plugin requires monkd v3.21.5 or newer and prompts to
   upgrade older installs.
 
 To remove everything later:

@@ -12,8 +12,17 @@
 # a superset of fields; "codex" emits ONLY the documented PostToolUse fields,
 # because Codex silently drops hook output that carries any unrecognized top-level
 # key (see diagnosticsResponseJson in src/hooks/cli.ts). The Codex hook passes
-# `-Format codex`; Claude/Cursor leave the default.
-param([ValidateSet('claude', 'codex')][string]$Format = 'claude')
+# `-Format codex`; Claude/Cursor leave the default. "antigravity" must print {}
+# on stdout whatever happens (its PostToolUse contract): the helper prints it
+# when it finishes, and this wrapper prints it on every other path.
+# $IgnoredArgs swallows anything after -Format: Antigravity's cross-platform
+# hook command ends in `|| ./hooks/<script>-antigravity.sh`, which can reach
+# this script as extra arguments on Windows (see antigravityHookCommand).
+param(
+  [ValidateSet('claude', 'codex', 'antigravity')][string]$Format = 'claude',
+  [Parameter(ValueFromRemainingArguments = $true)][string[]]$IgnoredArgs
+)
+$answered = $false
 
 # On non-Windows the .sh sibling handles this; bow out to avoid emitting the same
 # diagnostics twice. On Windows the .ps1 owns it: a host may spawn the .sh in an
@@ -25,7 +34,10 @@ if ($env:OS -ne 'Windows_NT' -and (Get-Command bash -ErrorAction SilentlyContinu
 $agentDir = if ($env:MONK_AGENT_INSTALL_DIR) { $env:MONK_AGENT_INSTALL_DIR } else { Join-Path $HOME ".monk\bin" }
 $agent = if ($env:MONK_AGENT_PATH) { $env:MONK_AGENT_PATH } else { Join-Path $agentDir "monk-agent.exe" }
 
-if (-not (Test-Path $agent)) { exit 0 }
+if (-not (Test-Path $agent)) {
+  if ($Format -eq 'antigravity') { '{}' }
+  exit 0
+}
 
 # Buffer stdin as bytes up front and write it to the child's own redirected
 # stdin, rather than leaving standard handles un-redirected and relying on
@@ -73,11 +85,14 @@ try {
   # 5.1's Process class has no tree-kill overload, so this only reaches the
   # helper itself.
   $timeoutMs = if ($env:MONK_AGENT_HOOK_TIMEOUT_MS) { [int]$env:MONK_AGENT_HOOK_TIMEOUT_MS } else { 20000 }
-  if (-not $agentProcess.WaitForExit($timeoutMs)) {
+  if ($agentProcess.WaitForExit($timeoutMs)) {
+    $answered = $agentProcess.ExitCode -eq 0
+  } else {
     try { $agentProcess.Kill() } catch {}
   }
 } catch {
 } finally {
   if ($agentProcess) { $agentProcess.Dispose() }
 }
+if ($Format -eq 'antigravity' -and -not $answered) { '{}' }
 exit 0

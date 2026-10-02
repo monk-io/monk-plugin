@@ -4,6 +4,18 @@
 #
 # Delegates to `monk-agent hook block-monk` so the logic stays in one place.
 # Falls back to native PowerShell if the binary is unavailable.
+#
+# Shared by every host. -Format antigravity (Antigravity's run_command hook)
+# reads toolCall.args.CommandLine and answers {"decision":"deny",...}; the
+# default claude shape reads tool_input.command and answers with
+# hookSpecificOutput (Claude Code, Cursor, Codex).
+# $IgnoredArgs swallows anything after -Format: Antigravity's cross-platform
+# hook command ends in `|| ./hooks/<script>-antigravity.sh`, which can reach
+# this script as extra arguments on Windows (see antigravityHookCommand).
+param(
+  [ValidateSet('claude', 'antigravity')][string]$Format = 'claude',
+  [Parameter(ValueFromRemainingArguments = $true)][string[]]$IgnoredArgs
+)
 
 $agentDir = if ($env:MONK_AGENT_INSTALL_DIR) { $env:MONK_AGENT_INSTALL_DIR } else { Join-Path $HOME ".monk\bin" }
 $agent = if ($env:MONK_AGENT_PATH) { $env:MONK_AGENT_PATH } else { Join-Path $agentDir "monk-agent.exe" }
@@ -35,7 +47,7 @@ if (Test-Path $agent) {
   try {
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
     $startInfo.FileName = $agent
-    $startInfo.Arguments = "hook block-monk --format claude"
+    $startInfo.Arguments = "hook block-monk --format $Format"
     $startInfo.UseShellExecute = $false
     $startInfo.RedirectStandardInput = $true
     $startInfo.RedirectStandardOutput = $true
@@ -79,8 +91,13 @@ if (Test-Path $agent) {
     } catch {
       $agentDecision = $null
     }
-    if ($agentDecision.hookSpecificOutput.hookEventName -eq "PreToolUse" -and
-        $agentDecision.hookSpecificOutput.permissionDecision -in @("allow", "ask", "deny")) {
+    $validDecision = if ($Format -eq 'antigravity') {
+      $agentDecision.decision -eq "deny"
+    } else {
+      $agentDecision.hookSpecificOutput.hookEventName -eq "PreToolUse" -and
+        $agentDecision.hookSpecificOutput.permissionDecision -in @("allow", "ask", "deny")
+    }
+    if ($validDecision) {
       Write-Output $agentText
       exit 0
     }
@@ -93,7 +110,10 @@ $hookInput = [System.Text.Encoding]::UTF8.GetString($hookBytes)
 if ($hookInput.Length -gt 0 -and $hookInput[0] -eq [char]0xFEFF) {
   $hookInput = $hookInput.Substring(1)
 }
-try { $command = ($hookInput | ConvertFrom-Json).tool_input.command } catch { exit 0 }
+try {
+  $payload = $hookInput | ConvertFrom-Json
+  $command = if ($Format -eq 'antigravity') { $payload.toolCall.args.CommandLine } else { $payload.tool_input.command }
+} catch { exit 0 }
 if (-not $command) { exit 0 }
 
 # Shell quoting/escaping ("monk", m\onk) and a wrapper-command list
@@ -102,7 +122,7 @@ if (-not $command) { exit 0 }
 # `timeout [flags] N` prefix (ENG-492), and zero or more leading
 # `NAME=value` assignments (ENG-492) don't change what actually runs, so
 # strip backslashes/quotes before matching and recognize `monkd` + a leading
-# forward-slash path (/usr/local/bin/monk). Blunt, non-quote-aware strip —
+# forward-slash path (/usr/local/bin/monk). Blunt next to the binary's tokenizer —
 # good enough for a degraded fallback that only runs when the binary itself
 # is missing (see block-monk.sh for the same tradeoff). Known gap versus the
 # primary `monk-agent hook block-monk` path: a backslash-separated Windows
@@ -110,13 +130,54 @@ if (-not $command) { exit 0 }
 # isn't detected, nor is `find -exec monk ...` or stacked wrappers
 # (`sudo env monk`) — the compiled binary's quote-state-aware tokenizer
 # handles those cases correctly.
-$normalized = $command.Replace('\', '').Replace('"', '').Replace("'", '')
+#
+# A separator inside quotes or after a backslash is an argument, not a
+# pipeline (`grep -n "a\|monk" f`, `grep -E 'a|monk'`), so drop the shell
+# quoting and turn each quoted or escaped separator into `_`. When the command
+# holds a wrapper that re-parses its argument as code (`sh -c "x | monk"`,
+# `eval`, `awk`, ...) or a command substitution (`"$(monk)"`), quoted text
+# really can run, so keep the blunt strip there and every separator with it.
+$reparse = '(^|[^A-Za-z0-9_.-])(eval|xargs|awk|perl|python[0-9.]*|powershell|cmd|bash|sh|zsh)([^A-Za-z0-9_-]|$)|\$\(|`'
+if ($command -match $reparse) {
+  $normalized = $command.Replace('\', '').Replace('"', '').Replace("'", '')
+} else {
+  $separators = ';&|`(){}' + "`r`n"
+  $sb = New-Object System.Text.StringBuilder
+  $quote = ''
+  for ($i = 0; $i -lt $command.Length; $i++) {
+    $c = [string]$command[$i]
+    if ($quote -eq "'") {
+      if ($c -eq "'") { $quote = '' } elseif ($separators.Contains($c)) { [void]$sb.Append('_') } else { [void]$sb.Append($c) }
+      continue
+    }
+    if ($c -eq '\') {
+      if ($i + 1 -lt $command.Length) {
+        $i++
+        $next = [string]$command[$i]
+        if ($separators.Contains($next)) { [void]$sb.Append('_') } else { [void]$sb.Append($next) }
+      }
+      continue
+    }
+    if ($quote -eq '"') {
+      if ($c -eq '"') { $quote = '' } elseif ($separators.Contains($c)) { [void]$sb.Append('_') } else { [void]$sb.Append($c) }
+      continue
+    }
+    if ($c -eq "'" -or $c -eq '"') { $quote = $c; continue }
+    [void]$sb.Append($c)
+  }
+  $normalized = $sb.ToString()
+}
 if ($normalized -match '(^|[\r\n;&|`({])\s*(sudo|command|env|exec|nohup|time|eval|xargs|awk|perl|python[0-9.]*|powershell(\.exe)?\s+-(Command|c)|cmd(\.exe)?\s+/c|(bash|sh|zsh)(\s+-c)?)?\s*(timeout(\s+-[A-Za-z]+(\s+\S+)?)*\s+[0-9.]+\s+)?([A-Za-z_][A-Za-z0-9_]*=\S*\s+)*([^\s;&|`(){}]*[\\/])?monkd?(\.(exe|cmd|bat|ps1))?(\s|$)') {
+  $reason = "Blocked: do not shell out to the ``monk`` CLI - it desyncs the cluster state Monk manages. Use the monk-agent MCP tools instead."
+  if ($Format -eq 'antigravity') {
+    @{ decision = "deny"; reason = $reason } | ConvertTo-Json -Compress
+    exit 0
+  }
   @{
     hookSpecificOutput = @{
       hookEventName            = "PreToolUse"
       permissionDecision       = "deny"
-      permissionDecisionReason = "Blocked: do not shell out to the ``monk`` CLI - it desyncs the cluster state Monk manages. Use the monk-agent MCP tools instead."
+      permissionDecisionReason = $reason
     }
   } | ConvertTo-Json -Compress
 }

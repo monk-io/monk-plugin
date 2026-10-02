@@ -47,11 +47,34 @@ emit_inject_steps() {
   printf '%s\n' "{\"injectSteps\":[{\"ephemeralMessage\":\"$escaped\"}]}"
 }
 
+# Deliver what monk-diagnostics left for this conversation, if anything.
+# Antigravity's PostToolUse hook must answer {}, so `monk-agent hook
+# diagnostics --format antigravity` writes a ready-made PreInvocation answer to
+# <home>/agent/hook-notices/<conversationId>.json instead (see
+# saveAntigravityNotice in src/hooks/cli.ts). Claimed with an atomic rename so a
+# concurrent invocation never prints it twice; done in shell because this hook
+# fires before every model call and starting the binary each time would cost.
+emit_pending_notice() {
+  [ -t 0 ] && return 0
+  payload="$(cat)"
+  conversation="$(printf '%s\n' "$payload" | sed -n 's/.*"conversationId"[[:space:]]*:[[:space:]]*"\([A-Za-z0-9_-]*\)".*/\1/p' | head -n 1)"
+  [ -n "$conversation" ] || return 0
+  notice="${MONK_AGENT_HOME:-"$HOME/.monk"}/agent/hook-notices/$conversation.json"
+  [ -f "$notice" ] || return 0
+  claimed="$notice.claimed-$$"
+  mv "$notice" "$claimed" 2>/dev/null || return 0
+  cat "$claimed"
+  rm -f "$claimed"
+  exit 0
+}
+
 # Fast path — already up. No telemetry here: this is a PreInvocation hook that
 # fires per model step, so emitting on the warm path would spam. The beacon
 # fires only on the cold-start paths below (install-needed / (re)start), which
-# is the meaningful "launcher started" signal for Antigravity.
+# is the meaningful "launcher started" signal for Antigravity. A notice left on
+# a cold start waits for the next invocation.
 if is_running; then
+  emit_pending_notice
   printf '%s\n' "{}"
   exit 0
 fi

@@ -126,15 +126,38 @@ function Test-AgentRunning {
 # refreshes a stale URL from a prior host/port. Uses ConvertFrom-Json /
 # ConvertTo-Json (always available in Windows PowerShell 5.1+) rather than
 # jq/python3 shell-outs.
+#
+# Written as UTF-8 WITHOUT a byte-order mark: Windows PowerShell 5.1's
+# `Set-Content -Encoding UTF8` prepends one, and Antigravity (Go) then rejects
+# the whole file ("invalid character '\ufeff'"), losing every MCP server in it,
+# and Monk's own setup refused to touch it. A file an older launcher already
+# wrote with a BOM is rewritten even when the entry is current, which repairs it.
+function Test-Utf8Bom([string]$Path) {
+  $Stream = [System.IO.File]::OpenRead($Path)
+  try {
+    $Head = New-Object byte[] 3
+    $Read = $Stream.Read($Head, 0, 3)
+    return $Read -eq 3 -and $Head[0] -eq 0xEF -and $Head[1] -eq 0xBB -and $Head[2] -eq 0xBF
+  } finally {
+    $Stream.Dispose()
+  }
+}
+
+function Write-Utf8NoBom([string]$Path, [string]$Text) {
+  [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding $false))
+}
+
 function Register-AntigravityMcp {
   $ConfigDir = Join-Path $HOME ".gemini\config"
   if (-not (Test-Path $ConfigDir)) { return }
 
   $ConfigPath = Join-Path $ConfigDir "mcp_config.json"
   $ServerUrl = $HealthResource
+  $HadBom = $false
   if ((Test-Path $ConfigPath) -and (Get-Item $ConfigPath).Length) {
+    $HadBom = Test-Utf8Bom $ConfigPath
     try {
-      $Config = Get-Content -Raw $ConfigPath | ConvertFrom-Json
+      $Config = Get-Content -Raw -Encoding UTF8 $ConfigPath | ConvertFrom-Json
     } catch {
       Write-Warning "Could not register Monk MCP server because $ConfigPath is not valid JSON."
       return
@@ -150,7 +173,7 @@ function Register-AntigravityMcp {
     Add-Member -InputObject $Config -NotePropertyName mcpServers -NotePropertyValue ([pscustomobject]@{}) -Force
   }
   if ($Config.mcpServers.PSObject.Properties.Name -contains "monk") {
-    if ($Config.mcpServers.monk.serverUrl -eq $ServerUrl) { return }
+    if ($Config.mcpServers.monk.serverUrl -eq $ServerUrl -and -not $HadBom) { return }
     if ($null -ne $Config.mcpServers.monk -and $Config.mcpServers.monk.GetType().FullName -eq "System.Management.Automation.PSCustomObject") {
       Add-Member -InputObject $Config.mcpServers.monk -NotePropertyName serverUrl -NotePropertyValue $ServerUrl -Force
     } else {
@@ -161,7 +184,7 @@ function Register-AntigravityMcp {
   }
   $TempPath = "$ConfigPath.tmp-$PID"
   try {
-    $Config | ConvertTo-Json -Depth 100 | Set-Content -Encoding UTF8 $TempPath
+    Write-Utf8NoBom $TempPath ($Config | ConvertTo-Json -Depth 100)
     Move-Item -Force $TempPath $ConfigPath
   } finally {
     Remove-Item -Force $TempPath -ErrorAction SilentlyContinue
@@ -417,6 +440,37 @@ if ($ManagedAgentEnsured) {
 
 # There is no launchd-style config store to introspect on Windows, so the
 # fields that matter for reuse are persisted to $StateFile on every start and
+# Returns the newer of two plugin versions, or this plugin's when either is not
+# a plain dotted number (a dev build).
+function Select-NewerPluginVersion {
+  param([string]$Recorded, [string]$Mine)
+  if (-not $Recorded) { return $Mine }
+  if (-not $Mine) { return $Recorded }
+  $RecordedParsed = $null
+  $MineParsed = $null
+  if ([version]::TryParse($Recorded, [ref]$RecordedParsed) -and
+      [version]::TryParse($Mine, [ref]$MineParsed) -and
+      $RecordedParsed -gt $MineParsed) {
+    return $Recorded
+  }
+  return $Mine
+}
+
+# One agent can be launched by several Monk plugins at once (Cursor runs its own
+# plugin's hooks and Claude Code's, which ship on different schedules). If each
+# restarted the agent whenever the recorded plugin_version differed from its
+# own, they would take turns restarting it on every session start. So the
+# recorded version only moves forward: a newer plugin restarts the agent once
+# to report itself (ENG-490), an older one leaves it alone.
+if (Test-Path $StateFile) {
+  $RecordedPluginVersion = ""
+  foreach ($Line in ((Get-Content -Raw $StateFile -ErrorAction SilentlyContinue) -split "`r?`n")) {
+    if ($Line.StartsWith("plugin_version=")) { $RecordedPluginVersion = $Line.Substring(15) }
+  }
+  $PluginVersion = Select-NewerPluginVersion $RecordedPluginVersion $PluginVersion
+  if ($PluginVersion) { $env:MONK_PLUGIN_VERSION = $PluginVersion }
+}
+
 # diffed here. Covers both a stale custom MONK_AGENT_PATH and drifted
 # auth/autospin config on an otherwise-healthy companion (ENG-390, ENG-397).
 function Test-BackgroundStateConfigured {

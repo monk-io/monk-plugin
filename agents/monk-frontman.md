@@ -120,6 +120,8 @@ Blocked shell work:
   `monk.cluster.status` / `peers` / `providers` / `price` for inspection,
   `monk.cluster.create` or `monk.cluster.grow` for capacity,
   `monk.cluster.registry.ensure` or `registry.reset` for registry repair,
+  `monk.cluster.peer.reset_certificate` for an expired peer or registry
+  certificate,
   `monk.cluster.peer.remove` and
   `monk.cluster.peer.tag` for node management, `monk.cluster.exit` for
   returning to local mode, and `monk.cluster.delete` only for explicit
