@@ -1,8 +1,28 @@
 # Changelog
 
-What's new in Monk. 59 releases between May 28 and October 2, 2026, newest first.
+What's new in Monk. 60 releases between May 28 and October 5, 2026, newest first.
 
 ## Unreleased
+
+## v0.1.69, 2026-10-05
+
+- Cluster cost estimates, and the approval for creating or growing a cluster, show only what your
+  cloud provider will charge. Monk no longer adds an infrastructure fee on top: it's billed by plan,
+  separately. Monthly usage no longer lists a fee either, and billing alerts no longer offer fee
+  alerts.
+- A personal account without a paid plan keeps working after the trial on the Free plan, with one
+  cluster and one environment. Creating a second cluster is refused before anything is provisioned,
+  instead of after the cloud nodes exist. The same applies to an organization whose Team plan has
+  ended.
+- Moving a cluster to another environment that isn't created, because the platform refused it or you
+  declined the creation, now leaves the cluster on its previous environment, instead of Monk
+  recording a move that didn't happen.
+- On Windows, Monk started by the installer keeps running after the installer finishes or its window
+  is closed. Coding agents that connect to Monk without a plugin hook, such as VS Code with Copilot,
+  no longer find nothing running until something else starts it.
+- On Windows, your coding agent is now also kept from running the Monk CLI through PowerShell,
+  including through the Linux install Monk keeps in WSL. It is pointed to the Monk tools instead, as
+  it already was for Bash.
 
 ## v0.1.68, 2026-10-02
 

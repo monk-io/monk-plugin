@@ -36,7 +36,15 @@ $Cases = @(
   @{ Name = "quoted-ere-alternation"; Command = 'grep -nE ''a|monk'' f'; Denied = $false },
   @{ Name = "escaped-pipe"; Command = 'grep a\|monk f'; Denied = $false },
   @{ Name = "real-pipe"; Command = 'grep "a|b" f | monk deploy'; Denied = $true },
-  @{ Name = "sh-c-pipe"; Command = 'sh -c "echo x | monk deploy"'; Denied = $true }
+  @{ Name = "sh-c-pipe"; Command = 'sh -c "echo x | monk deploy"'; Denied = $true },
+  # ENG-457: a PowerShell tool reaches the CLI installed in WSL through wsl.exe.
+  @{ Name = "wsl-sh-lc"; Command = 'wsl.exe -d Ubuntu-Monk -- sh -lc "monk version"'; Denied = $true },
+  @{ Name = "wsl-direct"; Command = 'wsl -d Ubuntu-Monk monk ps'; Denied = $true },
+  @{ Name = "wsl-bash-chain"; Command = "wsl -- bash --login -c 'cd ~; monk ps'"; Denied = $true },
+  @{ Name = "backtick-escape"; Command = 'm`onk ps'; Denied = $true },
+  @{ Name = "powershell-flags"; Command = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "monk ps"'; Denied = $true },
+  @{ Name = "wsl-list"; Command = 'wsl --list --verbose'; Denied = $false },
+  @{ Name = "wsl-other-command"; Command = 'wsl -d Ubuntu-Monk -- ls ~/monk'; Denied = $false }
 )
 
 function Assert-HookCases {

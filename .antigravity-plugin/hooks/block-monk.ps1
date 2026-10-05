@@ -1,4 +1,4 @@
-# PreToolUse hook for the Bash tool: block any shell-out to the `monk` CLI.
+# PreToolUse hook for shell tools: block any shell-out to the `monk` CLI.
 # Monk owns its own cluster state - running `monk ...` from a shell desyncs it.
 # Use monk-agent MCP tools instead.
 #
@@ -137,7 +137,7 @@ if (-not $command) { exit 0 }
 # holds a wrapper that re-parses its argument as code (`sh -c "x | monk"`,
 # `eval`, `awk`, ...) or a command substitution (`"$(monk)"`), quoted text
 # really can run, so keep the blunt strip there and every separator with it.
-$reparse = '(^|[^A-Za-z0-9_.-])(eval|xargs|awk|perl|python[0-9.]*|powershell|cmd|bash|sh|zsh)([^A-Za-z0-9_-]|$)|\$\(|`'
+$reparse = '(^|[^A-Za-z0-9_.-])(eval|xargs|awk|perl|python[0-9.]*|powershell|pwsh|cmd|wsl|iex|invoke-expression|bash|sh|zsh)([^A-Za-z0-9_-]|$)|\$\(|`'
 if ($command -match $reparse) {
   $normalized = $command.Replace('\', '').Replace('"', '').Replace("'", '')
 } else {
@@ -167,7 +167,12 @@ if ($command -match $reparse) {
   }
   $normalized = $sb.ToString()
 }
-if ($normalized -match '(^|[\r\n;&|`({])\s*(sudo|command|env|exec|nohup|time|eval|xargs|awk|perl|python[0-9.]*|powershell(\.exe)?\s+-(Command|c)|cmd(\.exe)?\s+/c|(bash|sh|zsh)(\s+-c)?)?\s*(timeout(\s+-[A-Za-z]+(\s+\S+)?)*\s+[0-9.]+\s+)?([A-Za-z_][A-Za-z0-9_]*=\S*\s+)*([^\s;&|`(){}]*[\\/])?monkd?(\.(exe|cmd|bat|ps1))?(\s|$)') {
+# The wrappers repeat, so `wsl.exe -d <distro> -- sh -lc "monk ..."` (how a
+# PowerShell tool reaches the CLI installed in WSL, ENG-457) resolves too, and
+# the command is matched once more with PowerShell's backtick escapes removed
+# (m`onk).
+$monkCommand = '(^|[\r\n;&|`({])\s*((sudo|command|env|exec|nohup|time|eval|xargs|awk|perl|python[0-9.]*|iex|invoke-expression|start-process|saps|(powershell|pwsh)(\.exe)?(\s+-(ExecutionPolicy|ep)\s+\S+|\s+-\S+)*|cmd(\.exe)?(\s+/\S+)*|wsl(\.exe)?(\s+(-d|-u|--distribution|--user|--cd)\s+\S+|\s+-\S*)*|(bash|sh|zsh)(\.exe)?(\s+-\S+)*)\s+)*(timeout(\s+-[A-Za-z]+(\s+\S+)?)*\s+[0-9.]+\s+)?([A-Za-z_][A-Za-z0-9_]*=\S*\s+)*([^\s;&|`(){}]*[\\/])?monkd?(\.(exe|cmd|bat|ps1))?(\s|$)'
+if ($normalized -match $monkCommand -or $normalized.Replace('`', '') -match $monkCommand) {
   $reason = "Blocked: do not shell out to the ``monk`` CLI - it desyncs the cluster state Monk manages. Use the monk-agent MCP tools instead."
   if ($Format -eq 'antigravity') {
     @{ decision = "deny"; reason = $reason } | ConvertTo-Json -Compress

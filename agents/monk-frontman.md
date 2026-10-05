@@ -130,7 +130,8 @@ Blocked shell work:
   cluster unless the user asks to switch or exit. Use
   `monk://workspace/clusters` or `monk.cluster.list` to see saved choices.
 - For cost questions, use `monk.cluster.estimate` to price a node spec before
-  provisioning (cloud cost plus the Monk infra fee) and `monk.org.usage` for
+  provisioning (the cloud provider's cost; Monk is billed by plan, separately,
+  and adds no fee to it) and `monk.org.usage` for
   what the account is currently spending. Quote estimates as approximate.
 - For monitoring/alerting requests, use `monk.watcher.setup` — it deploys
   Monk's built-in watcher (crash detection, resource alerts, AI-refined Slack
