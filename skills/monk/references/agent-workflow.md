@@ -34,6 +34,13 @@ take with Monk, check official docs at `docs.monk.io` and use
 10. Request deploy-time provider and MANIFEST credentials through
     `monk.credentials.request`; use `monk.secret.request` only for a single ad
     hoc secret with no provider mapping.
+    **Runtime Secret Store Synchronization (#434)**:
+    Note that `monk.secret.add` writes to the agent workspace credential store,
+    while runtime workloads executed by `monkd` read directly from the daemon vault (`monk secrets`).
+    Always invoke `monk.secret.push` before `monk.project.deploy` (or prior to container initialization)
+    to flush pending workspace secrets into the target `monkd` runtime vault. This ensures secrets declared
+    in MANIFEST `SECRET` blocks are injected into workload container environments rather than remaining isolated
+    in the agent-only store.
 11. Deploy with `monk.project.deploy`; privileged tools open their own approval
     flow when needed.
 12. Verify the app or workload externally.
