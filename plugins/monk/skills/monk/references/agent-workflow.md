@@ -9,12 +9,13 @@ take with Monk, check official docs at `docs.monk.io` and use
 1. Initialize session with workspace root.
 2. Check `monk.auth.status`.
 3. Check `monk.runtime.status`.
-4. If signed out, the `monk.*` tools are absent — direct the user to the host MCP
-   auth flow (`/mcp`, `codex mcp login monk`, or Cursor's MCP login) to sign in.
-   To sign in as a different Monk user, `monk.auth.logout` first (a host-side
-   logout leaves `monk-agent` signed in, so the next sign-in silently reuses the
-   same account), then re-run the host auth flow — the host may still list the
-   server as authenticated, so re-authenticate explicitly. Personal-vs-org
+4. If signed out, the `monk.*` tools are absent — sign in: in Claude Code call
+   the `monk` server's `monk_sign_in` tool (it opens the browser), in Codex
+   `codex mcp login monk`, in Cursor its MCP login. To sign in as a different
+   Monk user, `monk.auth.logout` first (a host-side logout leaves `monk-agent`
+   signed in, so the next sign-in silently reuses the same account), then sign
+   in again — Codex and Cursor may still list the server as authenticated, so
+   re-authenticate explicitly. Personal-vs-org
    context within the same user is `monk.account.select`, not a logout.
 5. If runtime is missing, call `monk.install.status` and surface install steps.
 6. Analyze the project.

@@ -146,7 +146,14 @@ emit_signin_nudge() {
   elif command -v wget >/dev/null 2>&1; then
     env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY wget -q -T 2 -O - --post-data="" "$nudge_url" >/dev/null 2>&1 || true
   fi
-  msg="monk-agent is running but you are NOT signed in to Monk. The Monk MCP tools require sign-in. If the user asks to deploy, analyze, or operate anything with Monk, first tell them to run /mcp and authenticate the monk MCP server (this signs them in to Monk). Do NOT describe this as a connection or restart problem, and do NOT deploy via Docker or another platform to work around it."
+  # Claude Code reaches Monk through the stdio bridge, which signs in with its
+  # own monk_sign_in tool; the other hosts use their MCP auth flow.
+  if [ "$client" = "claude-code" ]; then
+    signin_step="call the monk_sign_in tool of the monk MCP server and tell them to finish in the browser tab it opens (this signs them in to Monk)"
+  else
+    signin_step="tell them to run /mcp and authenticate the monk MCP server (this signs them in to Monk)"
+  fi
+  msg="monk-agent is running but you are NOT signed in to Monk. The Monk MCP tools require sign-in. If the user asks to deploy, analyze, or operate anything with Monk, first $signin_step. Do NOT describe this as a connection or restart problem, and do NOT deploy via Docker or another platform to work around it."
   if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && command -v jq >/dev/null 2>&1; then
     jq -n --arg ctx "$msg" \
       '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $ctx}}'

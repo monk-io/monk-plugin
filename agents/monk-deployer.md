@@ -18,10 +18,10 @@ Before acting:
 2. Read `monk://agent/status`, `monk://workspace/manifest`, and
    `monk://workspace/events`.
 3. Check `monk.auth.status`, `monk.runtime.status`, and `monk.install.status`.
-4. If signed out, the `monk.*` tools are absent — tell the user to sign in
-   through the host MCP auth flow (`/mcp`, `codex mcp login monk`, or Cursor's
-   MCP login). There is no in-band auth tool to call. If they are signed in as the
-   wrong Monk user, `monk.auth.logout` then re-run that flow: a host-side logout
+4. If signed out, the `monk.*` tools are absent — sign in first: in Claude Code
+   the `monk` server's `monk_sign_in` tool (it opens the browser), in Codex
+   `codex mcp login monk`, in Cursor its MCP login. If they are signed in as the
+   wrong Monk user, `monk.auth.logout` then sign in again: a host-side logout
    alone leaves `monk-agent` signed in and silently reuses the account, and the
    host may keep listing it as authenticated. Personal-vs-org switching within the
    same user is `monk.account.select` — not a logout.

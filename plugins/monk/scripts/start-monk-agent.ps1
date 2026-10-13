@@ -194,7 +194,14 @@ function Show-SigninNudge {
     Invoke-RestMethod -Uri "$BaseUrl/plugin/nudge?type=signin&client=$Client" -Method Post -TimeoutSec 2 @ProxyArgs | Out-Null
   } catch {
   }
-  $Msg = "monk-agent is running but you are NOT signed in to Monk. The Monk MCP tools require sign-in. If the user asks to deploy, analyze, or operate anything with Monk, first tell them to run /mcp and authenticate the monk MCP server (this signs them in to Monk). Do NOT describe this as a connection or restart problem, and do NOT deploy via Docker or another platform to work around it."
+  # Claude Code reaches Monk through the stdio bridge, which signs in with its
+  # own monk_sign_in tool; the other hosts use their MCP auth flow.
+  if ($Client -eq "claude-code") {
+    $SignInStep = "call the monk_sign_in tool of the monk MCP server and tell them to finish in the browser tab it opens (this signs them in to Monk)"
+  } else {
+    $SignInStep = "tell them to run /mcp and authenticate the monk MCP server (this signs them in to Monk)"
+  }
+  $Msg = "monk-agent is running but you are NOT signed in to Monk. The Monk MCP tools require sign-in. If the user asks to deploy, analyze, or operate anything with Monk, first $SignInStep. Do NOT describe this as a connection or restart problem, and do NOT deploy via Docker or another platform to work around it."
   if ($env:CLAUDE_PLUGIN_ROOT) {
     @{ hookSpecificOutput = @{ hookEventName = "SessionStart"; additionalContext = $Msg } } | ConvertTo-Json -Compress -Depth 4 | Write-Output
   } else {

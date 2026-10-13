@@ -1,8 +1,14 @@
 # Changelog
 
-What's new in Monk. 61 releases between May 28 and October 13, 2026, newest first.
+What's new in Monk. 62 releases between May 28 and October 13, 2026, newest first.
 
 ## Unreleased
+
+## v0.1.71, 2026-10-13
+
+- Signing in to Monk now works in the Claude desktop app, which refused to open Monk's sign-in page.
+  In Claude Code, the app and the terminal alike, ask Claude to sign in to Monk and approve it in
+  your browser; there is no `/mcp` step anymore.
 
 ## v0.1.70, 2026-10-13
 

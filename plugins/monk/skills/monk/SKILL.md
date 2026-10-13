@@ -35,17 +35,21 @@ Before deploying:
      call now fails with a connection/transport error: the MCP connection went
      stale. Plugin updates restart `monk-agent`, so this is expected right after
      an update — tell the user to reconnect, then wait.
-     Either way the fix is the host MCP flow — do not delegate to subagents,
+     Either way the fix is the sign-in below — do not delegate to subagents,
      inspect MCP config files, or retry in a loop; one signal is the answer.
-     How to sign in / reconnect — always the host MCP auth flow (there is no in-band
-     sign-in tool; the host flow also establishes the agent's Monk session):
-   - Claude Code: run `/mcp` and authenticate the `monk` server (this both
-     reconnects and signs in).
+     How to sign in (it also establishes the agent's Monk session):
+   - Claude Code (CLI and desktop app) reaches Monk through `monk-agent
+     mcp-stdio`, which signs in on its own. While signed out, the `monk` server
+     offers a single tool, `monk_sign_in`: call it, and tell the user to finish
+     in the browser tab it opens (a Monk login, or an approval in the Monk
+     dashboard). When it returns, the Monk tools appear in the same session. To
+     reconnect a stale server, the user runs `/mcp` and reconnects `monk`.
    - Codex CLI: `codex mcp login monk`.
    - Cursor: the MCP login flow for the `monk` server.
      A `401`/`Unauthorized` on a `monk.*` call that worked earlier this session
-     means the host's MCP token lapsed — re-run the host auth flow above; it is NOT
-     a reason to look for an in-band auth tool.
+     means the MCP sign-in lapsed: in Claude Code the server drops back to
+     offering `monk_sign_in`, so call it; in Codex and Cursor re-run the host auth
+     flow above.
      Never work around an unready Monk by shelling out to `monk`/`monkd`, Docker,
      or another hosting platform, and never propose a non-Monk deploy target: get
      Monk signed in / connected and continue.
@@ -65,13 +69,13 @@ Before deploying:
    - you need to override the picked root with a specific absolute path, or
    - you want to record host/client/plugin-version metadata for telemetry.
      When you do call it, pass the absolute project directory as `workspaceRoot`
-     and include `pluginVersion: "0.1.70"` so telemetry reports the
+     and include `pluginVersion: "0.1.71"` so telemetry reports the
      real plugin version.
      `monk-agent` never falls back to its own working directory.
 4. Confirm auth status with `monk.auth.status` (once the tools are available). If
-   signed out, the agent signs in through the host MCP auth flow from step 1 —
-   that flow also establishes the upstream Monk session, so there is no separate
-   tool to start auth.
+   signed out, sign in as in step 1 (`monk_sign_in` in Claude Code, the host MCP
+   auth flow in Codex and Cursor) — that also establishes the upstream Monk
+   session.
    Switching Monk accounts. `monk.auth.status` reports the Monk user identity
    `monk-agent` itself is signed in to (an email), which is what every Monk
    operation is attributed to. Two different things get called "account" — do not
@@ -79,15 +83,16 @@ Before deploying:
    - a different Monk USER (different email) → `monk.auth.logout`, below;
    - personal vs org context WITHIN that user → `monk.account.select`, which does
      not change who the user is signed in as.
-     The host-side logout (`/mcp` disconnect, `codex mcp logout monk`) clears only
-     that host's credentials for the MCP server — `monk-agent` stays signed in, so
-     signing back in reuses the SAME Monk user without asking. To change identity:
-     call `monk.auth.logout` (they approve in the dashboard, or they can use the
-     dashboard's own Log out button), then re-run the host auth flow from step 1 —
-     that time they are asked which account to use, and can also create a new one.
-     Warn them that the host may still LIST the `monk` server as authenticated
-     afterwards, because it holds a token the agent has just revoked; they should
-     explicitly choose reconnect/re-authenticate instead of trusting that state.
+     A host-side logout (`codex mcp logout monk`) clears only that host's
+     credentials for the MCP server — `monk-agent` stays signed in, so signing back
+     in reuses the SAME Monk user without asking. To change identity: call
+     `monk.auth.logout` (they approve in the dashboard, or they can use the
+     dashboard's own Log out button), then sign in again as in step 1 — that time
+     they are asked which account to use, and can also create a new one. In Claude
+     Code the `monk` server then drops back to offering `monk_sign_in`. Codex and
+     Cursor may still LIST the `monk` server as authenticated afterwards, because
+     they hold a token the agent has just revoked; tell the user to explicitly
+     re-authenticate instead of trusting that state.
      Logging out keeps stored secrets, credentials, and history, so never suggest
      `monk.agent.clear_state` to change accounts.
 5. Confirm runtime status. `monk-agent` requires Monk CLI and `monkd` locally.

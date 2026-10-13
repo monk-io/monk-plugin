@@ -62,7 +62,8 @@ To add Monk to a single agent yourself instead:
 /reload-plugins
 ```
 
-Sign in with `/mcp`, then authenticate the `monk` server. To update later:
+Then ask Claude to sign in to Monk: it opens your browser, in the CLI and the
+desktop app alike. To update later:
 `/plugin update monk@monk-plugins`, then `/reload-plugins`.
 
 **OpenAI Codex**

@@ -1,0 +1,58 @@
+#!/usr/bin/env sh
+# Claude Code's `monk` MCP server: monk-agent's stdio bridge (`monk-agent mcp-stdio`).
+#
+# Claude's desktop app refuses to open a sign-in page that is not https, so the
+# agent's own OAuth over http://127.0.0.1 can't sign in there. The bridge signs
+# in itself (its `monk_sign_in` tool opens the browser) and proxies everything
+# else to the running agent, so the CLI and the app behave the same.
+#
+# The plugin manifest names this file without an extension. Claude Code starts
+# stdio servers through cross-spawn, which on Windows resolves the name to the
+# `monk-mcp.cmd` sibling; macOS and Linux run this script.
+#
+# stdout carries MCP protocol only: everything else goes to stderr.
+set -eu
+
+script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+if [ -n "${MONK_AGENT_PATH:-}" ]; then
+  agent="$MONK_AGENT_PATH"
+else
+  agent="${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent"
+  # Install only when there is no binary yet. Updating is the SessionStart
+  # hook's job: it restarts the agent after an update, which it would skip if
+  # this script had already replaced the binary under it.
+  if [ ! -x "$agent" ] && [ "${MONK_AGENT_SKIP_ENSURE:-0}" != "1" ]; then
+    agent="$("$script_dir/ensure-monk-agent.sh")"
+  fi
+fi
+
+if [ ! -x "$agent" ]; then
+  echo "monk-agent is not executable at $agent" >&2
+  exit 2
+fi
+
+# The SessionStart hook starts the agent alongside this server. Give it a moment
+# before the bridge starts one itself, so the hook's supervised agent owns the
+# port. The bridge starts it when nothing answers (no hook, or the hook failed).
+port="${MONK_AGENT_PORT:-7419}"
+host="${MONK_AGENT_HOST:-127.0.0.1}"
+case "$host" in
+  \[*\]) ;;
+  *:*) host="[$host]" ;;
+esac
+ready_wait="${MONK_MCP_READY_WAIT:-15}"
+case "$ready_wait" in
+  ''|*[!0-9]*) ready_wait=15 ;;
+esac
+if command -v curl >/dev/null 2>&1; then
+  waited=0
+  while [ "$waited" -lt "$ready_wait" ]; do
+    curl -fsS --noproxy '*' --max-time 1 \
+      "http://$host:$port/.well-known/oauth-protected-resource" >/dev/null 2>&1 && break
+    sleep 1
+    waited=$((waited + 1))
+  done
+fi
+
+exec "$agent" mcp-stdio

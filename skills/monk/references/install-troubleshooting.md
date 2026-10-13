@@ -29,10 +29,11 @@ After `monk-agent` is available, inspect the full `monk.install.status` result:
 status and runs nothing. Use `execute: true` to run remediation, only after the
 user's go-ahead for installation, upgrade, and repair actions.
 
-Claude Code and Codex can also surface native MCP OAuth for Streamable HTTP
-servers. If Monk MCP appears as "needs authentication", use the host-native auth
-flow first: `/mcp` in Claude Code, `codex mcp login monk` in Codex CLI, or
-Cursor's MCP login flow for Cursor. If host-side MCP auth is cleared, Monk MCP
+Claude Code reaches Monk through `monk-agent mcp-stdio`, which signs in on its
+own: while signed out, the `monk` server offers only `monk_sign_in`, which opens
+the browser. Codex and Cursor use native MCP OAuth for Streamable HTTP servers.
+If Monk MCP appears as "needs authentication" there, use the host-native auth
+flow first: `codex mcp login monk` in Codex CLI, or Cursor's MCP login flow. If host-side MCP auth is cleared, Monk MCP
 should reject requests until the host obtains a fresh bearer token.
 
 ## macOS
