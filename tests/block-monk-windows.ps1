@@ -30,6 +30,14 @@ $Cases = @(
   # program) is not — the trailing boundary still requires whitespace/EOL.
   @{ Name = "monkd"; Command = "monkd status"; Denied = $true },
   @{ Name = "monkdb-lookalike"; Command = "monkdb migrate"; Denied = $false },
+  # A separator or redirection right after the name still ends it (ENG-697).
+  @{ Name = "separator-semicolon"; Command = "monk;ls"; Denied = $true },
+  @{ Name = "separator-ampersand"; Command = "monk&ls"; Denied = $true },
+  @{ Name = "separator-pipe"; Command = "monk|ls"; Denied = $true },
+  @{ Name = "separator-double-ampersand"; Command = "monk&&ls"; Denied = $true },
+  @{ Name = "separator-multiple"; Command = "echo x; monk; ls"; Denied = $true },
+  @{ Name = "redirect-out"; Command = "monk>out.txt"; Denied = $true },
+  @{ Name = "redirect-in"; Command = "monk<in.txt"; Denied = $true },
   # A quoted or escaped `|` is a grep alternation, not a pipeline; a real
   # pipe, or one inside a re-parsed `sh -c` string, still counts.
   @{ Name = "quoted-bre-alternation"; Command = 'grep -n "a\|monk" f'; Denied = $false },

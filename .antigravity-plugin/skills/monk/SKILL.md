@@ -22,11 +22,11 @@ Before deploying:
 
 1. Confirm the local Monk MCP tools/resources are available. These are backed
    by `monk-agent`.
-   - Antigravity handles Monk MCP authentication automatically via OAuth. If
-     authentication is required, use Antigravity's MCP authentication flow:
-     Agent Settings → Customizations tab → Authenticate next to the monk
-     server. Complete the flow in your browser, then return here.
-   - Once authenticated, Antigravity reconnects automatically.
+   - Antigravity reaches Monk through `monk-agent mcp-stdio`, which signs in on
+     its own. While signed out, the monk server offers a single tool,
+     `monk_sign_in`: call it, and tell the user to finish in the browser tab it
+     opens (a Monk login, or an approval in the Monk dashboard). There is no code
+     to copy back. When it returns, the Monk tools appear in the same session.
 2. If `monk-agent` is missing, start it by running
    `scripts/start-monk-agent.sh` on macOS/Linux or `scripts/start-monk-agent.ps1`
    on Windows. Do not fall back to direct `monk` CLI operations.
@@ -37,18 +37,14 @@ Before deploying:
    absolute path to the project directory. Omit the call only if you have
    confirmed that Monk already has the correct workspace root bound.
 4. Confirm auth status with `monk.auth.status` (once the tools are available). If
-   signed out, sign in through Antigravity's MCP auth flow (step 1) — that flow
-   also establishes the upstream Monk session; there is no in-band tool to start
-   auth. Disconnecting the MCP server host-side clears only Antigravity's own
-   credentials, so `monk-agent` stays signed in to the same Monk user and the
-   next sign-in reuses it silently. To sign in as a different Monk user, call
-   `monk.auth.logout` (approved in the dashboard) and then re-run the flow from
-   step 1 — that time the user picks the account. Antigravity may still list the
-   server as authenticated afterwards, holding a token the agent has revoked, so
-   tell the user to explicitly re-authenticate. Logging out keeps stored secrets
-   and credentials; do not use `monk.agent.clear_state` for this. Switching
-   personal vs org context within the same user is `monk.account.select` instead
-   — a different operation; ask which the user means if it is ambiguous.
+   signed out, sign in with `monk_sign_in` (step 1) — that also establishes the
+   upstream Monk session. To sign in as a different Monk user, call
+   `monk.auth.logout` (approved in the dashboard); the monk server then drops
+   back to offering `monk_sign_in`, and that sign-in lets the user pick the
+   account. Logging out keeps stored secrets and credentials; do not use
+   `monk.agent.clear_state` for this. Switching personal vs org context within
+   the same user is `monk.account.select` instead — a different operation; ask
+   which the user means if it is ambiguous.
 5. Confirm runtime status. `monk-agent` requires Monk CLI and `monkd` locally.
    If missing or broken, use `monk.install.status` to inspect the
    platform-specific `humanExplanation`, `relationships`, `components`,
@@ -56,8 +52,7 @@ Before deploying:
    Explain the current platform's install graph before running remediation.
    `monk.install.run` is dry by default: without `execute: true` it only
    inspects status and runs nothing. Use `execute: true` to run remediation.
-   Installation, upgrade, and repair actions also require `approved: true`
-   after explicit user or dashboard approval.
+   Installation, upgrade, and repair actions need the user's go-ahead first.
 
 ## Tooling contract
 
@@ -222,9 +217,10 @@ run.
   - `unbound`: bind the workspace with `monk.scope.bind`. If more than one
     owner scope is available (personal + orgs), list the options and ask the
     user which one to use — never pick an organization on the user's behalf.
-    Pass `confirmedByUser: true` only after they chose.
+    The user approves the target in the dashboard.
   - `ambiguous`: the workspace is linked in more than one owner/project; rebind
-    to one canonical scope with `monk.scope.bind` and `confirmMove: true`.
+    to one canonical scope with `monk.scope.bind`; the user approves the move in the
+    dashboard.
   - `resolved`: proceed.
 - "Link this repo to a Monk project", "show this project in my Monk
   dashboard" and similar requests mean `monk.scope.bind`. For a new project,
@@ -232,14 +228,19 @@ run.
   `createProject: true`; for a named existing project, pass that
   `projectSlug` without `createProject`. A plain local deploy does not create
   any dashboard records on its own; only a bind does.
+- A git repository is one workspace on the platform, named after the repository: its folders
+  (`packages/api`, `web`) share one record, owner and project, so binding or deleting from one
+  applies to all of them. A folder gets a record of its own only when its MANIFEST has its own
+  `REPO` line. Add one only when the user wants that folder linked separately, and tell them it
+  creates a second record. Otherwise use the same `REPO` value in every MANIFEST of the repository.
+  Outside git (no version control, Mercurial, Subversion) every folder is its own workspace; use the
+  same `REPO` value in each MANIFEST to share one record.
 - List available owners and projects from `monk://account/scopes`. Bind with
   `monk.scope.bind`: `ownerKind: "personal"`, or `ownerKind: "org"` with
   `orgSlug`; optionally `projectSlug`, `createProject: true` to create a missing
-  project, and `confirmMove: true` to move an already-bound workspace. Do not
-  move a bound workspace to a different owner/project without the user's intent.
-  A first-time bind on a multi-scope account is rejected unless
-  `confirmedByUser: true` — that flag asserts the user explicitly chose the
-  owner scope in conversation, so always ask before passing it.
+  project. Moving an already-bound workspace, or a first-time bind on a multi-scope
+  account, is approved by the user in the dashboard; do not move a bound workspace to a
+  different owner/project without the user's intent, and ask which owner first.
 - Select a deployment environment with `monk.environment.list` and
   `monk.environment.select`. A resolved environment determines the default
   cluster and the `monk.project.deploy` target, so once scope and environment
@@ -252,8 +253,7 @@ run.
   `stale: true` (served from cache) with `pendingPlatformOps > 0` (platform
   writes queued for retry). Keep working; queued writes flush when the control
   plane returns. An auth error ("not signed in" or token rejected) is NOT
-  transient — re-authenticate through Antigravity's MCP auth flow (see Preflight)
-  before retrying.
+  transient — sign in again with `monk_sign_in` (see Preflight) before retrying.
 
 ## Safety rules
 
@@ -440,7 +440,7 @@ For a first deploy:
     `linkOffer.args` (`projectSlug` defaults to the directory name,
     lowercase-dashed; use a name the user gives instead) and
     `createProject: true`. If `linkOffer.owners` lists more than one owner,
-    ask which one first and pass `confirmedByUser: true`. If the deploy
+    ask which one first and pass that owner. If the deploy
     finished in the background (you polled `monk.action.status`) and
     `monk.scope.status` reports `unbound`, make the same offer once.
 
@@ -465,6 +465,32 @@ For an existing Monk-built project:
   `monk://workspace/feed` before retrying; the underlying action or approval may
   still be active in `monk-agent`.
 - Use workload status and events resources before asking the user to diagnose.
+
+## Capsules (per-branch previews)
+
+When the user asks for preview environments, per-branch or per-PR
+environments, "an environment per agent", or Monk Capsules, the template work
+comes before `monk.capsule.setup`. Each capsule deploys the MANIFEST `ENTRY`
+with the variable `environment` set to the branch slug, and that is the only
+thing that makes branches differ:
+
+- Declare `environment` once, on the `ENTRY` group, defaulting to the base
+  branch name. Members inherit it. Never redeclare it on a member: a member's
+  own declaration shadows the branch value, and every capsule falls back to the
+  default.
+- Build every name that lives outside the cluster from it (managed databases,
+  entity resources, buckets, DNS records). A literal name is shared by every
+  branch, so their previews read and write the same data while their tests
+  still pass.
+- Make sure the project deploys cleanly to a normal cluster first, and give the
+  app a health endpoint that checks its own dependencies.
+- Prefer `cloud` mode for anything with a web front end; `cluster` mode cannot
+  route branches separately.
+- Never edit `.github/workflows/dynenv.yml`, add steps that run Monk or call
+  monk-actions' scripts, or tear a capsule down with cluster tools to work
+  around a failing run. Re-running `monk.capsule.setup` regenerates the file
+  and drops the edits, and a capsule torn down outside the workflow leaves its
+  records behind. Report the failure with `monk.feedback.submit` instead.
 
 ## App code expectations
 

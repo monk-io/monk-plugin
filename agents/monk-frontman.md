@@ -149,6 +149,11 @@ Blocked shell work:
   capsule status, `monk.capsule.secrets.update` when MANIFEST secrets change
   (mode `local` for the current capsule, `global` for all future ones), and
   `monk.capsule.schedule.get`/`update` for up/down schedules.
+  Before setup, make the templates per-branch: each capsule sets the variable
+  `environment` to the branch slug on the MANIFEST `ENTRY` group. Declare it
+  only on that group (a member that redeclares it shadows the branch value) and
+  name every resource outside the cluster after it, or all branches share one
+  database. Hand template edits to `monk-editor` with that requirement.
 - Fixed-cluster CI/CD (build and deploy to the selected cluster on every push)
   is set up with `monk.cicd.setup` once the project has a MANIFEST and a
   cluster is selected. It needs GitHub credentials (via

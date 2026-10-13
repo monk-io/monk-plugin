@@ -89,92 +89,8 @@ health_url="$base_url/.well-known/oauth-protected-resource"
 health_resource="$base_url/mcp"
 
 # Register monk in Antigravity's global MCP config if ~/.gemini/config/ exists.
-# Idempotent — skips if already registered. Uses jq when available; prints
-# manual instructions otherwise.
-register_antigravity_mcp() {
-  gemini_cfg="$HOME/.gemini/config"
-  [ -d "$gemini_cfg" ] || return 0
-  mcp_cfg="$gemini_cfg/mcp_config.json"
-  server_url="$base_url/mcp"
-  # Treat an empty file the same as a missing file to avoid jq/python parse errors.
-  has_existing=0
-  if [ -f "$mcp_cfg" ] && [ -s "$mcp_cfg" ]; then
-    has_existing=1
-  fi
-  if [ "$has_existing" = "1" ]; then
-    # Validate before touching the file — a malformed unrelated config must
-    # produce a warning, not abort the launcher after the health check passed.
-    valid=1
-    if command -v jq >/dev/null 2>&1; then
-      jq -e 'type == "object"' "$mcp_cfg" >/dev/null 2>&1 || valid=0
-    elif command -v python3 >/dev/null 2>&1; then
-      python3 -c 'import json, sys
-with open(sys.argv[1], encoding="utf-8") as handle:
-    cfg = json.load(handle)
-raise SystemExit(0 if isinstance(cfg, dict) else 1)' "$mcp_cfg" >/dev/null 2>&1 || valid=0
-    fi
-    if [ "$valid" = "0" ]; then
-      echo "Warning: $mcp_cfg is not a valid JSON object; skipping automatic Antigravity MCP registration." >&2
-      printf '  Add manually if desired: {"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >&2
-      return 0
-    fi
-    # Check the structured .mcpServers.monk.serverUrl value against the current
-    # host/port, not just presence of the key — a stale registration from a
-    # prior host/port must be refreshed, not mistaken for an existing one.
-    already_registered=0
-    if command -v jq >/dev/null 2>&1; then
-      jq -e --arg u "$server_url" '.mcpServers.monk.serverUrl == $u' "$mcp_cfg" >/dev/null 2>&1 &&
-        already_registered=1
-    elif command -v python3 >/dev/null 2>&1; then
-      python3 -c '
-import json, sys
-with open(sys.argv[1], encoding="utf-8") as handle:
-    cfg = json.load(handle)
-servers = cfg.get("mcpServers")
-monk = servers.get("monk") if isinstance(servers, dict) else None
-sys.exit(0 if isinstance(monk, dict) and monk.get("serverUrl") == sys.argv[2] else 1)
-' "$mcp_cfg" "$server_url" >/dev/null 2>&1 && already_registered=1
-    else
-      # No JSON tool available to parse structurally; fall back to the
-      # conservative substring guard rather than risk corrupting the file.
-      grep -Fq "\"$server_url\"" "$mcp_cfg" 2>/dev/null && already_registered=1
-    fi
-    [ "$already_registered" = "1" ] && return 0
-  fi
-  tmp="$(mktemp)"
-  if command -v jq >/dev/null 2>&1; then
-    if [ "$has_existing" = "1" ]; then
-      jq --arg u "$server_url" '.mcpServers.monk = {serverUrl: $u}' "$mcp_cfg" >"$tmp"
-    else
-      jq -n --arg u "$server_url" '{mcpServers: {monk: {serverUrl: $u}}}' >"$tmp"
-    fi
-  elif command -v python3 >/dev/null 2>&1; then
-    if [ "$has_existing" = "1" ]; then
-      python3 -c '
-import json, sys
-with open(sys.argv[1], encoding="utf-8") as handle:
-    cfg = json.load(handle)
-servers = cfg.get("mcpServers")
-if not isinstance(servers, dict):
-    servers = {}
-cfg["mcpServers"] = servers
-servers["monk"] = {"serverUrl": sys.argv[2]}
-json.dump(cfg, sys.stdout, indent=2)
-print()
-' "$mcp_cfg" "$server_url" >"$tmp"
-    else
-      printf '{"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >"$tmp"
-    fi
-  else
-    rm -f "$tmp"
-    echo "Add monk to $mcp_cfg to enable Antigravity MCP (jq or python3 required to auto-write):" >&2
-    printf '  {"mcpServers":{"monk":{"serverUrl":"%s"}}}\n' "$server_url" >&2
-    return 0
-  fi
-  mv "$tmp" "$mcp_cfg"
-  echo "Registered monk MCP server in $mcp_cfg" >&2
-}
-
+# Shared with Antigravity's own ensure-monk-agent hook: see antigravity-mcp.sh.
+. "$script_dir/antigravity-mcp.sh"
 # If the agent is up but the user is not signed in to Monk, print SessionStart
 # context telling the host agent to prompt the user to sign in via /mcp. Without
 # this the host only sees "tools unavailable" and mis-reports it as a connection
@@ -214,12 +130,15 @@ emit_signin_nudge() {
   # JSON output may render as `"signedIn": true` with a space, which the exact
   # substring match below would otherwise miss and misreport as signed-out.
   compact_body="$(printf '%s' "$body" | tr -d '[:space:]')"
+  # Signed in or signed out are the only answers worth acting on, and only an explicit
+  # signedIn:false is a confirmed signed-out state. An empty body (read error, 500,
+  # timeout) and anything else (malformed, partial or unrelated) are non-definitive:
+  # stay quiet rather than tell the user they are signed out when we do not know.
   case "$compact_body" in
     *'"signedIn":true'*) return 0 ;;
+    *'"signedIn":false'*) ;;
+    *) return 0 ;;
   esac
-  # Empty body = read error / 500 / timeout, NOT a confirmed signed-out state —
-  # suppress the nudge. Only an affirmative signedIn:false reaches the nudge below.
-  [ -n "$body" ] || return 0
   # $client is resolved once at the top of the script (Cursor-aware ordering).
   nudge_url="$base_url/plugin/nudge?type=signin&client=$client"
   if command -v curl >/dev/null 2>&1; then
@@ -431,13 +350,13 @@ background_process_configured() {
 # companion must still be reused when SKIP_ENSURE=1 instead of being
 # unconditionally killed and restarted (ENG-711).
 if [ "$os" != "Darwin" ] && [ "$agent_updated" = "0" ] && background_process_configured && is_running; then
-  register_antigravity_mcp
+  register_antigravity_mcp "$agent_path" "$health_resource"
   emit_signin_nudge
   exit 0
 fi
 
 if [ "$os" = "Darwin" ] && [ "$agent_updated" = "0" ] && is_running && launchd_configured; then
-  register_antigravity_mcp
+  register_antigravity_mcp "$agent_path" "$health_resource"
   emit_signin_nudge
   exit 0
 fi
@@ -583,7 +502,7 @@ esac
 ready_deadline=$(( $(date +%s) + ready_timeout ))
 while [ "$(date +%s)" -lt "$ready_deadline" ]; do
   if is_running; then
-    register_antigravity_mcp
+    register_antigravity_mcp "$agent_path" "$health_resource"
     emit_signin_nudge
     exit 0
   fi

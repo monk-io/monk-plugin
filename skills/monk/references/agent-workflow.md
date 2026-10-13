@@ -40,7 +40,7 @@ take with Monk, check official docs at `docs.monk.io` and use
 
 For cluster work, first resolve scope: call `monk.scope.status` and, if the
 workspace is `unbound` or `ambiguous`, bind it to an owner/project with
-`monk.scope.bind` (`confirmMove: true` to move an already-bound workspace).
+`monk.scope.bind` (the user approves moving an already-bound workspace in the dashboard).
 Mutating cluster operations require a resolved scope; org scope also enforces
 the org's cluster RBAC policy. Optionally pick a target environment with
 `monk.environment.list` / `monk.environment.select`. Then inspect with

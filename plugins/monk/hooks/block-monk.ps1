@@ -171,7 +171,7 @@ if ($command -match $reparse) {
 # PowerShell tool reaches the CLI installed in WSL, ENG-457) resolves too, and
 # the command is matched once more with PowerShell's backtick escapes removed
 # (m`onk).
-$monkCommand = '(^|[\r\n;&|`({])\s*((sudo|command|env|exec|nohup|time|eval|xargs|awk|perl|python[0-9.]*|iex|invoke-expression|start-process|saps|(powershell|pwsh)(\.exe)?(\s+-(ExecutionPolicy|ep)\s+\S+|\s+-\S+)*|cmd(\.exe)?(\s+/\S+)*|wsl(\.exe)?(\s+(-d|-u|--distribution|--user|--cd)\s+\S+|\s+-\S*)*|(bash|sh|zsh)(\.exe)?(\s+-\S+)*)\s+)*(timeout(\s+-[A-Za-z]+(\s+\S+)?)*\s+[0-9.]+\s+)?([A-Za-z_][A-Za-z0-9_]*=\S*\s+)*([^\s;&|`(){}]*[\\/])?monkd?(\.(exe|cmd|bat|ps1))?(\s|$)'
+$monkCommand = '(^|[\r\n;&|`({])\s*((sudo|command|env|exec|nohup|time|eval|xargs|awk|perl|python[0-9.]*|iex|invoke-expression|start-process|saps|(powershell|pwsh)(\.exe)?(\s+-(ExecutionPolicy|ep)\s+\S+|\s+-\S+)*|cmd(\.exe)?(\s+/\S+)*|wsl(\.exe)?(\s+(-d|-u|--distribution|--user|--cd)\s+\S+|\s+-\S*)*|(bash|sh|zsh)(\.exe)?(\s+-\S+)*)\s+)*(timeout(\s+-[A-Za-z]+(\s+\S+)?)*\s+[0-9.]+\s+)?([A-Za-z_][A-Za-z0-9_]*=\S*\s+)*([^\s;&|`(){}]*[\\/])?monkd?(\.(exe|cmd|bat|ps1))?([\s;&|`(){}<>]|$)'
 if ($normalized -match $monkCommand -or $normalized.Replace('`', '') -match $monkCommand) {
   $reason = "Blocked: do not shell out to the ``monk`` CLI - it desyncs the cluster state Monk manages. Use the monk-agent MCP tools instead."
   if ($Format -eq 'antigravity') {

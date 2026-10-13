@@ -1,8 +1,89 @@
 # Changelog
 
-What's new in Monk. 60 releases between May 28 and October 5, 2026, newest first.
+What's new in Monk. 61 releases between May 28 and October 13, 2026, newest first.
 
 ## Unreleased
+
+## v0.1.70, 2026-10-13
+
+- On Windows, Monk no longer forgets your sign-in and saved secrets when your coding agent was
+  started from a PowerShell 7 terminal.
+- When Windows' secure storage stops working, Monk now keeps your sign-in and secrets where they are
+  and says so on the dashboard, instead of quietly starting over with an empty store and asking you
+  to sign in again.
+- Capsule setup now warns when part of your app declares its own `environment` variable. That
+  declaration overrides the branch name each capsule sets, so every branch's preview would share the
+  same databases and other resources.
+- Your coding agent now knows how to prepare a project for capsules: name databases and other
+  resources outside the cluster after the branch, and pick cloud mode for apps with a web front end.
+  When a capsule run fails, it reports the problem instead of editing the generated workflow.
+- Capsule setup now allows GitHub Actions to open pull requests in your repository, which new
+  repositories don't allow by default. Without it each capsule's pull request couldn't be opened, so
+  closing a branch didn't tear its capsule down. When Monk isn't allowed to change the setting,
+  setup tells you where to turn it on.
+- An operation waiting for your approval now hands your coding agent the link to approve it within a
+  minute, instead of holding the call open until the agent gives up and loses track of it.
+- Retrying an operation that is still waiting for approval no longer adds a second identical
+  approval; your coding agent is pointed at the one already waiting.
+- Setting up or updating capsules no longer requires every secret your app needs to be stored in
+  Monk. Secrets already saved for your repository on GitHub are kept as they are, and refreshing
+  your cloud token or a single value never removes the rest from future capsules. Only secrets
+  missing everywhere are asked for, through Monk.
+- A deploy keeps the environment you selected even when Monk's platform can't be reached at that
+  moment, instead of deploying without one.
+- Stronger checks that keep your coding agent using Monk's tools instead of running the Monk command
+  line directly.
+- Bug reports no longer include the full path of your project folder, only its name.
+- A request that names two different project folders is now refused with a clear message, instead of
+  quietly using one of them.
+- Hardened the checks Monk's local service applies to the requests it receives.
+- Clusters that stay unreachable are now retried less and less often in the background, and only the
+  first failure is written to the log, so a long list of old clusters no longer floods it.
+- Setup on Windows no longer pauses for over a minute while looking for coding agents and working
+  out its plan.
+- With telemetry turned off, the dashboard's status bar no longer reports that components need
+  attention. Turning telemetry off is a choice, not a problem.
+- The review for adding nodes to a cluster now shows them with the names they'll get, such as
+  `prod-3` and `prod-4` when the cluster already has `prod-1` and `prod-2`, instead of repeating the
+  existing names.
+- Long operations such as creating a cluster keep sending progress updates at a steady pace, so your
+  coding agent no longer risks timing out the call during a quiet stretch.
+- Monk's log now says when a coding agent's sign-in is refused and why: client registration,
+  consent, the token exchange and rejected connections. It never contains codes or tokens.
+- The dashboard transfers far less data while it sits open: an unchanged task list is no longer
+  downloaded again, and the task view loads only the task you're looking at.
+- The check when a coding agent session starts no longer tells you that you are signed out of Monk
+  when it can't read the sign-in status clearly. It now only says so when Monk reports it.
+- Signing in to Monk from Google Antigravity now works like in other coding agents: ask Antigravity
+  to sign in, approve it in your browser, and you're done. There is no longer a code to copy from a
+  second browser tab back into Antigravity.
+- Monk in Google Antigravity now works with the project you have open, instead of looking for it in
+  Antigravity's own program folder.
+- On Windows, signing in through Monk's optional `mcp-stdio` command now opens the right page in
+  your browser, instead of an ordinary Monk login that never finished the sign-in.
+- Listing a cluster's secrets right after you add, push or remove one now shows the change. It used
+  to show the list from before, for a short while.
+- Looking up what roles a person has in an organization now shows the roles you assigned. It used to
+  show none, so the permission checks built on it said they had no access, and removing the role was
+  refused as if they did not have it.
+- When you are not allowed to read an organization's roles or who holds a role, Monk now says so
+  instead of reporting that nothing is assigned.
+- Creating an organization role with a name that is not lowercase letters and digits joined by `-`
+  or `_` is now refused before you are asked to approve it. Existing roles keep working.
+- When your coding agent passes an option a Monk tool does not take, Monk now says which option it
+  ignored and lists the ones the tool accepts, instead of ignoring it without a word.
+- A folder inside a git repository now registers in your account under the repository's name, the
+  same as the repository's top folder, instead of under the folder's own name. Workspaces already
+  linked from a subfolder keep working and move to the new name the next time they are linked. The
+  dashboard's workspace list shows both, for example `shop → api`, and lists a folder that has its
+  own `REPO` line in its MANIFEST as a separate workspace. Choosing an owner for a workspace that is
+  also linked to another owner now asks for approval before removing that other link.
+- Retagging a cluster node no longer drops its reserved system tag, and the node that runs the
+  cluster's registry can no longer be removed, even if an earlier retag already removed its tag. A
+  removal is refused before it asks for approval, and one that times out after the node was in fact
+  removed now says so instead of reporting a failure. Creating or growing a cluster with the
+  reserved system tag in the requested tags is now refused with a message, instead of leaving the
+  tag out without saying so.
 
 ## v0.1.69, 2026-10-05
 

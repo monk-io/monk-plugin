@@ -49,7 +49,7 @@ import json, sys
 with open(sys.argv[1], encoding="utf-8") as handle:
     config = json.load(handle)
 
-assert config["mcpServers"]["monk"]["serverUrl"] == "http://127.0.0.1:7419/mcp"
+assert config["mcpServers"]["monk"] == {"command": "/usr/bin/true", "args": ["mcp-stdio", "--url", "http://127.0.0.1:7419/mcp"]}
 assert config["preserved"] == {"value": "still here"}
 ' "$config"
 

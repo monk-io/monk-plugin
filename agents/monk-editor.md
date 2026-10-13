@@ -137,6 +137,10 @@ relative to their context directory. Identifiers such as repo names, image tags,
 blob names, and entry targets should be kebab-case. ENTRY and runnable
 references must be fully qualified, for example `namespace/entity`.
 
+`REPO` also names the workspace record on the Monk platform. In a git repository, use the same
+`REPO` value in every MANIFEST so its folders stay one workspace. Give a folder a different one only
+when the user wants it linked to its own owner or project, and tell them.
+
 Supported directives:
 
 ```text
@@ -165,6 +169,22 @@ ENV staging prod
 ENTRY staging:myapp/staging
 ENTRY prod:myapp/prod
 ```
+
+## Per-branch previews (Monk Capsules)
+
+When the project is being prepared for capsules, or already has
+`.github/workflows/dynenv.yml`, every capsule deploys `ENTRY` with the
+variable `environment` set to the branch slug. Make the templates use it:
+
+- Declare `environment` once, on the `ENTRY` group, defaulting to the base
+  branch name (`main`). Never declare it on a member: a member's own
+  declaration shadows the group's value, so that member keeps the default on
+  every branch.
+- Build every name that lives outside the cluster from it, e.g.
+  `` name: <- `shop-${environment}` ``, for managed databases, entity resources,
+  buckets and DNS records. A literal name there is shared by every branch.
+- Resources inside the cluster (containers, volumes, the node domain) are
+  already per-capsule and need nothing.
 
 ## Editing rules
 

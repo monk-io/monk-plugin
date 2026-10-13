@@ -26,9 +26,8 @@ After `monk-agent` is available, inspect the full `monk.install.status` result:
 - `nextAction` and `actions`: recommended remediation.
 
 `monk.install.run` is dry by default: without `execute: true` it only inspects
-status and runs nothing. Use `execute: true` to run remediation, and pass
-`approved: true` only after explicit user or dashboard approval for
-installation, upgrade, and repair actions.
+status and runs nothing. Use `execute: true` to run remediation, only after the
+user's go-ahead for installation, upgrade, and repair actions.
 
 Claude Code and Codex can also surface native MCP OAuth for Streamable HTTP
 servers. If Monk MCP appears as "needs authentication", use the host-native auth

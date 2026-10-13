@@ -119,77 +119,10 @@ function Test-AgentRunning {
   }
 }
 
-# Register monk in Antigravity's global MCP config if ~/.gemini/config/ exists.
-# POSIX parity: start-monk-agent.sh has had register_antigravity_mcp() since
-# ENG-391/ENG-393/ENG-395/ENG-402; this launcher had no equivalent at all
-# (ENG-451). Idempotent — skips if already registered at the current URL, and
-# refreshes a stale URL from a prior host/port. Uses ConvertFrom-Json /
-# ConvertTo-Json (always available in Windows PowerShell 5.1+) rather than
-# jq/python3 shell-outs.
-#
-# Written as UTF-8 WITHOUT a byte-order mark: Windows PowerShell 5.1's
-# `Set-Content -Encoding UTF8` prepends one, and Antigravity (Go) then rejects
-# the whole file ("invalid character '\ufeff'"), losing every MCP server in it,
-# and Monk's own setup refused to touch it. A file an older launcher already
-# wrote with a BOM is rewritten even when the entry is current, which repairs it.
-function Test-Utf8Bom([string]$Path) {
-  $Stream = [System.IO.File]::OpenRead($Path)
-  try {
-    $Head = New-Object byte[] 3
-    $Read = $Stream.Read($Head, 0, 3)
-    return $Read -eq 3 -and $Head[0] -eq 0xEF -and $Head[1] -eq 0xBB -and $Head[2] -eq 0xBF
-  } finally {
-    $Stream.Dispose()
-  }
-}
-
-function Write-Utf8NoBom([string]$Path, [string]$Text) {
-  [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding $false))
-}
-
-function Register-AntigravityMcp {
-  $ConfigDir = Join-Path $HOME ".gemini\config"
-  if (-not (Test-Path $ConfigDir)) { return }
-
-  $ConfigPath = Join-Path $ConfigDir "mcp_config.json"
-  $ServerUrl = $HealthResource
-  $HadBom = $false
-  if ((Test-Path $ConfigPath) -and (Get-Item $ConfigPath).Length) {
-    $HadBom = Test-Utf8Bom $ConfigPath
-    try {
-      $Config = Get-Content -Raw -Encoding UTF8 $ConfigPath | ConvertFrom-Json
-    } catch {
-      Write-Warning "Could not register Monk MCP server because $ConfigPath is not valid JSON."
-      return
-    }
-    if ($null -eq $Config -or $Config.GetType().FullName -ne "System.Management.Automation.PSCustomObject") {
-      Write-Warning "Could not register Monk MCP server because $ConfigPath is not a JSON object."
-      return
-    }
-  } else {
-    $Config = [pscustomobject]@{}
-  }
-  if ($null -eq $Config.mcpServers -or $Config.mcpServers.GetType().FullName -ne "System.Management.Automation.PSCustomObject") {
-    Add-Member -InputObject $Config -NotePropertyName mcpServers -NotePropertyValue ([pscustomobject]@{}) -Force
-  }
-  if ($Config.mcpServers.PSObject.Properties.Name -contains "monk") {
-    if ($Config.mcpServers.monk.serverUrl -eq $ServerUrl -and -not $HadBom) { return }
-    if ($null -ne $Config.mcpServers.monk -and $Config.mcpServers.monk.GetType().FullName -eq "System.Management.Automation.PSCustomObject") {
-      Add-Member -InputObject $Config.mcpServers.monk -NotePropertyName serverUrl -NotePropertyValue $ServerUrl -Force
-    } else {
-      $Config.mcpServers.monk = [pscustomobject]@{ serverUrl = $ServerUrl }
-    }
-  } else {
-    Add-Member -InputObject $Config.mcpServers -NotePropertyName monk -NotePropertyValue ([pscustomobject]@{ serverUrl = $ServerUrl })
-  }
-  $TempPath = "$ConfigPath.tmp-$PID"
-  try {
-    Write-Utf8NoBom $TempPath ($Config | ConvertTo-Json -Depth 100)
-    Move-Item -Force $TempPath $ConfigPath
-  } finally {
-    Remove-Item -Force $TempPath -ErrorAction SilentlyContinue
-  }
-}
+# Register monk in Antigravity's global MCP config if ~/.gemini/config/ exists
+# (ENG-451; the stdio bridge entry since ENG-852). Shared with Antigravity's own
+# ensure-monk-agent hook, so it lives in one place: see antigravity-mcp.ps1.
+. (Join-Path $ScriptDir "antigravity-mcp.ps1")
 
 # If the agent is up but the user is not signed in to Monk, print SessionStart
 # context telling the host agent to prompt the user to sign in via /mcp. Without
@@ -238,15 +171,18 @@ function Show-SigninNudge {
     return
   }
   # PowerShell has a native JSON parser (unlike the POSIX-sh sibling, which is
-  # stuck string-matching), so decide structurally: an unparseable payload is
-  # treated as non-definitive (suppress), and only a truthy signedIn returns
-  # without nudging — an explicit signedIn:false falls through to the nudge.
+  # stuck string-matching), so decide structurally. Signed in or signed out are
+  # the only answers worth acting on, and only an explicit boolean false is a
+  # confirmed signed-out state: an unparseable payload, valid JSON without a
+  # boolean signedIn (an error body, an unrelated object, null, a number or a
+  # string) is non-definitive, so suppress. A missing property reads as $null,
+  # which a bare truthiness test would have taken for signed out.
   try {
     $Auth = $Body | ConvertFrom-Json
   } catch {
     return
   }
-  if ($Auth.signedIn) {
+  if ($null -eq $Auth -or $Auth.signedIn -isnot [bool] -or $Auth.signedIn) {
     return
   }
   # $Client is resolved once at the top of the script (Cursor-aware ordering).
@@ -499,7 +435,7 @@ function Test-BackgroundStateConfigured {
 }
 
 if (-not $AgentUpdated -and (Test-BackgroundStateConfigured) -and (Test-AgentRunning)) {
-  Register-AntigravityMcp
+  Register-AntigravityMcp -AgentPath $AgentPath -ServerUrl $HealthResource
   Show-SigninNudge
   exit 0
 }
@@ -537,7 +473,7 @@ $Process.Id | Set-Content -NoNewline $PidFile
 $ReadyTimer = [System.Diagnostics.Stopwatch]::StartNew()
 while ($ReadyTimer.Elapsed.TotalSeconds -lt $ReadyTimeoutSec) {
   if (Test-AgentRunning) {
-    Register-AntigravityMcp
+    Register-AntigravityMcp -AgentPath $AgentPath -ServerUrl $HealthResource
     Show-SigninNudge
     exit 0
   }

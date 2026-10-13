@@ -47,8 +47,8 @@ project; never bind without a yes. On yes, call `monk.scope.bind` with
 `linkOffer.args` (`projectSlug` plus `createProject: true`).
 When binding for the first time and `monk.scope.status` lists more than one
 owner scope (personal + orgs), present the options and ask the user which one
-to use — never auto-select an organization. Pass `confirmedByUser: true` to
-`monk.scope.bind` only after the user explicitly chose.
+to use — never auto-select an organization. Pass the owner they chose to
+`monk.scope.bind`; they approve the target in the dashboard.
 
 ## Standalone kit deploy
 

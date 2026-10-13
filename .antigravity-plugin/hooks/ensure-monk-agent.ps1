@@ -62,6 +62,23 @@ function Test-AgentRunning {
   }
 }
 
+$ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+$InstallDir = if ($env:MONK_AGENT_INSTALL_DIR) { $env:MONK_AGENT_INSTALL_DIR } else { Join-Path $HOME ".monk\bin" }
+$AgentPath = if ($env:MONK_AGENT_PATH) { $env:MONK_AGENT_PATH } else { Join-Path $InstallDir "monk-agent.exe" }
+
+# The plugin's own mcp_config.json declares no server: its entry would have to
+# name this machine's monk-agent, which a rendered file cannot. So this hook
+# writes the global stdio-bridge entry, as setup and the shared launcher do
+# (ENG-852). Cheap when current (one small file read), and kept off stdout.
+function Register-MonkMcp {
+  if (-not (Test-Path $AgentPath)) { return }
+  try {
+    . (Join-Path (Split-Path -Parent $ScriptDir) "scripts\antigravity-mcp.ps1")
+    Register-AntigravityMcp -AgentPath $AgentPath -ServerUrl $HealthResource 3>$null | Out-Null
+  } catch {}
+}
+Register-MonkMcp
+
 # Fast path - already up. No telemetry here: this is a PreInvocation hook that
 # fires per model step, so emitting on the warm path would spam. The beacon fires
 # only on the cold-start paths below (install-needed / (re)start), which is the
@@ -96,18 +113,13 @@ if (Test-AgentRunning) {
 # Cold start - emit the earliest plugin_launcher_started beacon before doing any
 # work. Shared helper, best-effort; writes no stdout so the hook's JSON stays
 # clean. launch_client is hardcoded because this hook is Antigravity-specific.
-$ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 $TelemetryHelper = Join-Path (Split-Path -Parent $ScriptDir) "scripts\monk-launcher-telemetry.ps1"
 if (Test-Path $TelemetryHelper) {
   . $TelemetryHelper
   Invoke-MonkLauncherEvent -Client "antigravity"
 }
 
-$InstallDir = if ($env:MONK_AGENT_INSTALL_DIR) { $env:MONK_AGENT_INSTALL_DIR } else { Join-Path $HOME ".monk\bin" }
-$AgentPath = if ($env:MONK_AGENT_PATH) { $env:MONK_AGENT_PATH } else { Join-Path $InstallDir "monk-agent.exe" }
-
 if (-not (Test-Path $AgentPath)) {
-  $ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
   $PluginDir = Split-Path -Parent $ScriptDir
   $StartScript = Join-Path $PluginDir "scripts\start-monk-agent.ps1"
   Write-Json @{

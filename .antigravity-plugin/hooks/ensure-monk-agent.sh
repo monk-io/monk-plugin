@@ -68,6 +68,21 @@ emit_pending_notice() {
   exit 0
 }
 
+plugin_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+agent_path="${MONK_AGENT_PATH:-${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent}"
+
+# The plugin's own mcp_config.json declares no server: its entry would have to
+# name this machine's monk-agent, which a rendered file cannot. So this hook
+# writes the global stdio-bridge entry, as setup and the shared launcher do
+# (ENG-852). Cheap when current, kept off stdout, and in a subshell so a
+# failure can never abort the hook under `set -eu`.
+if [ -x "$agent_path" ]; then
+  (
+    . "$plugin_dir/scripts/antigravity-mcp.sh"
+    register_antigravity_mcp "$agent_path" "$health_resource"
+  ) >/dev/null 2>&1 || true
+fi
+
 # Fast path — already up. No telemetry here: this is a PreInvocation hook that
 # fires per model step, so emitting on the warm path would spam. The beacon
 # fires only on the cold-start paths below (install-needed / (re)start), which
@@ -82,17 +97,13 @@ fi
 # Cold start — emit the earliest plugin_launcher_started beacon before doing any
 # work. Shared helper, best-effort; must never abort the hook. launch_client is
 # hardcoded because this hook is Antigravity-specific.
-telemetry_helper="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)/scripts/monk-launcher-telemetry.sh"
+telemetry_helper="$plugin_dir/scripts/monk-launcher-telemetry.sh"
 if [ -f "$telemetry_helper" ]; then
   . "$telemetry_helper"
   monk_emit_launcher_event antigravity || true
 fi
 
-# Find the installed binary
-agent_path="${MONK_AGENT_PATH:-${MONK_AGENT_INSTALL_DIR:-"$HOME/.monk/bin"}/monk-agent}"
-
 if [ ! -x "$agent_path" ]; then
-  plugin_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
   emit_inject_steps "monk-agent is not installed. Run \`$plugin_dir/scripts/start-monk-agent.sh\` once to install and start it, then continue."
   exit 0
 fi

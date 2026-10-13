@@ -38,10 +38,9 @@ Use this flow:
    logs. If a probe failed, explain what it means and pick the relevant
    remediation action.
 8. `monk.install.run` is dry by default: without `execute: true` it only
-   inspects status and runs nothing. Use `execute: true` to run remediation.
-   For install, upgrade, or repair actions, also pass `approved: true` only
-   after the user has approved them or the dashboard form has provided
-   approval.
+   inspects status and runs nothing. Use `execute: true` to run remediation,
+   only after the user has approved install, upgrade, or repair actions or
+   the dashboard form has provided approval.
 9. After installation or remediation, re-check both `monk.install.status` and
    `monk.runtime.status`. Only hand back to deploy once all runtime checks pass.
 

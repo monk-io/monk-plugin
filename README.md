@@ -91,8 +91,7 @@ Restart Cursor, then log in to the `monk` server in Cursor's MCP settings.
 agy plugin install https://github.com/monk-io/monk-plugin/tree/main/.antigravity-plugin
 ```
 
-Restart Antigravity, then open **Agent Settings → Customizations** and choose
-**Authenticate** next to `monk`.
+Restart Antigravity, then ask it to sign in to Monk and approve in your browser.
 
 **Devin**
 
