@@ -159,6 +159,13 @@ with no local build), skip this section and continue from step 5 above.
   certificate in place, keeping the domain and registry address, and restarts
   the registry and ingress. Do not disable TLS verification, reboot the node,
   or re-run the domain setup yourself as a workaround.
+- If the renewal fails saying the domain was removed (Monk removes the domain
+  of a node that stayed silent for too long), run
+  `monk.cluster.peer.replace_domain` for that peer. It gives the peer a new
+  domain, so every URL under the old name changes (`<env>.<domain>` sites, and
+  the registry address if that peer hosts it): tell the user, and update CI
+  settings that name the registry. A domain that still exists, or is only
+  paused because its node stopped reporting, is not replaced; check the node.
 - Ingress: `monk.cluster.create` enables the cluster ingress (traefik) plugin,
   so services declaring `ingress-routes` in their templates are served on
   80/443 with HTTPS and a public domain. If a deployed web service is only
@@ -192,7 +199,14 @@ superseded workloads left behind after an inheritance-based redeploy:
 
 - Use `monk.workload.delete` or `monk.workload.purge`. These stop and remove
   the container/runnable state; no separate `monk.workload.stop` call is needed
-  first.
+  first. They delete in dependency order and can take many minutes when cloud
+  resources are involved.
+- If the delete stopped short, the items it lists are kept; run the same delete
+  again to resume it. If it was refused because other workloads depend on it,
+  nothing was deleted: tell the user which workloads depend on it. Pass
+  `forget: true` only when the user explicitly wants to abandon what cannot be
+  deleted — anything Monk cannot delete is then no longer tracked and may need
+  manual cleanup in the cloud provider.
 - Only call `monk.workload.unload` afterward if the template was loaded from
   the workspace MANIFEST. For external package workloads (e.g. `monk/vaultwarden`
   or any runnable not defined in the workspace), skip `unload` — it is not

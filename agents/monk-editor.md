@@ -262,9 +262,52 @@ ingress-routes:
     port: 3001
 ```
 
-Routes support options like `path-prefix` and `path-rewrite`
-(`regex`/`to`); verify field names with `monk.docs.search` before using
-anything beyond a plain prefix route.
+A route matches requests on `host`, `path` and `path-prefix`; the ingress builds
+the rule from the ones that are set:
+
+| Set on the route                    | Matches                                        |
+| ----------------------------------- | ---------------------------------------------- |
+| `host`                              | requests for that host, any path               |
+| `path`                              | exactly that path, on any host                 |
+| `path-prefix`                       | that path and everything under it, on any host |
+| `host` with `path` or `path-prefix` | both must match                                |
+
+If `path` and `path-prefix` are both set, only `path` is used and the prefix is
+ignored. A route with none of the three is ignored. `host` is a bare hostname (no scheme,
+port or path) compared with the request's Host header, so one cluster can serve
+several sites by giving each its own host, usually with `path-prefix: /`. The
+same host and prefix on two routes clash. A `path-prefix` is not stripped before
+the request reaches the service: for an app that expects to live at `/`, add
+`path-rewrite` (`regex: "^/api/(.*)"`, `to: "/$1"`).
+
+```yaml
+ingress-routes:
+  web:
+    host: app.example.com
+    path-prefix: /
+  api:
+    host: app.example.com
+    path-prefix: /api
+    path-rewrite:
+      regex: "^/api/(.*)"
+      to: "/$1"
+```
+
+A host has to resolve to a cluster node, and for HTTPS be covered by a
+certificate (the node's own, or an entry in the ingress plugin's `global-certs`;
+`*.example.com` covers one label). Otherwise it is served with the ingress's
+default certificate and browsers reject it. A node's platform domain also answers
+for any name under it, `<name>.<node-domain>`.
+
+Take the host from a variable when it differs per deploy: declare `ingress-host`
+(string, default `""`) on the group, then use `host: <- $ingress-host` next to
+`path-prefix: /`. Set it to the real domain in production or dev; capsules on a
+shared cluster get `<branch>.<node-domain>` filled in (see the capsules
+reference). Keep the `path-prefix`: an empty host leaves a plain `PathPrefix(/)`
+route that matches every host, while a route with only an empty host has no rule
+and is dropped.
+
+Verify any other field name with `monk.docs.search` before using it.
 
 If ingress is unavailable at deploy time (the plugin failed to enable or is
 still syncing on a fresh cluster), KEEP the `ingress-routes` configuration and

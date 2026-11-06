@@ -22,8 +22,10 @@ environment. From then on GitHub Actions drives everything:
    MANIFEST's images, and deploys the MANIFEST's `ENTRY` workload. It also opens
    a `[capsule] <branch>` pull request that stands for the capsule's lifetime.
 2. **Later pushes** rebuild and update the same capsule in place.
-3. **Closing or merging that PR**, or running the workflow with
-   `action=destroy`, tears the capsule down. Teardown nukes the capsule's
+3. **Closing or merging that PR**, **deleting the branch**, or running the
+   workflow with `action=destroy`, tears the capsule down. An hourly check also
+   destroys the capsule of a branch that no longer exists, in case the delete
+   was missed. Teardown nukes the capsule's
    cluster, which runs every entity's delete lifecycle, so managed resources the
    templates created are removed with it.
 4. An optional up/down schedule (`monk.capsule.schedule.update`) stops and
@@ -103,9 +105,29 @@ Review these before running setup:
 - **`cloud`** (default): one cluster per branch. Strong isolation, its own
   domain and ingress. Use this for anything with a web front end.
 - **`cluster`**: every branch shares one cluster, namespaced by branch. Cheaper
-  and faster to start, but branches share the node domain and ingress routes
-  are fixed per template, so only one branch's web service is reachable.
-  Suitable for workers and APIs reached by internal address only.
+  and faster to start, but branches share the node domain, so a web service
+  needs its own host per branch. Have its route take the host from a stack
+  variable: declare `ingress-host` (string, default `""`) on the stack and
+  write `host: <- $ingress-host` next to `path-prefix: /` on the route. Deploy
+  sets the variable to `<branch>.<node domain>` and reports that as the preview
+  URL. Keep the `path-prefix`: an empty host leaves a plain `PathPrefix(/)`
+  route, and a route with only an empty host has no rule and is dropped. The
+  same variable can hold a real domain in production or dev. Without it only
+  the first branch's web service is reachable: the others' runs succeed and
+  report a preview URL that shows the first branch's app. Branches also push
+  their images to the cluster's one registry, so an image tag that does not
+  change between branches (`latest`) makes a node that already has it run the
+  first branch's build for the others. Deploy does not tag per branch yet, so
+  change the tag on the MANIFEST `IMAGE` line and the template's `image` in each
+  branch (for example `app:<branch>`). Workers and APIs reached by internal
+  address need no host, but the same image-tag rule applies.
+  Setup warns when the cluster's node domain does not answer for subdomains (a
+  node created before the platform did): the generated host will not resolve
+  there, so use a new cluster for web previews.
+  The cluster needs a worker node besides its system node (which runs the
+  registry and ingress, never capsules). Setup tags the workers for capsules
+  and refuses a cluster that has only the system node: add one with
+  `monk.cluster.grow` first.
 
 ## Before Running Setup
 
@@ -113,20 +135,28 @@ Review these before running setup:
    Capsules run the same MANIFEST; a template that does not deploy will not
    deploy as a capsule either.
 2. Per-branch names are parameterized as above.
-3. The workspace is bound to an **org** project (`monk.scope.bind`); capsules
-   do not support personal-scope projects yet.
-4. GitHub credentials are stored (`monk.credentials.request`, provider
+3. The workspace is bound to a project (`monk.scope.bind`), in an org or in a
+   personal account. Capsules need a paid plan: a personal account on the Free
+   plan, or an organization without an active Team plan, can't run them,
+   because every branch's capsule needs an environment of its own (and, in
+   cloud mode, a cluster of its own). Setup refuses such an account and says
+   so; tell the user to upgrade or start the Team plan rather than retry. When
+   setup can't reach the platform to check, it goes on, and a later step that
+   fails with a plan limit has the same cause.
+4. In cloud mode the region and instance type are ones the provider offers:
+   call `monk.cluster.catalog` for the provider and region and pick from it,
+   rather than guessing a size. Setup checks them like cluster create does and
+   refuses one that isn't offered, naming the valid ones. Providers retire
+   sizes by region, so a size that worked last month may not work now.
+5. GitHub credentials are stored (`monk.credentials.request`, provider
    `github`), and in cloud mode the cloud provider's too. The GitHub token
    needs Administration (write) on the repository in addition to the
    Actions, Secrets, Variables and Environments permissions the form lists.
-5. Setup turns on "Allow GitHub Actions to create and approve pull requests"
+6. Setup turns on "Allow GitHub Actions to create and approve pull requests"
    for the repository. If its result says it couldn't (the token lacks
    Administration, or an org policy forbids it), pass that step on to the
-   user: without it the lifecycle PR cannot be opened, and closing a branch
-   will not tear its capsule down.
-6. The default branch is checked out. Setup treats the current branch as the
-   base branch and excludes it from capsules, so running it from a feature
-   branch means that branch never gets one.
+   user: without it the lifecycle PR cannot be opened, so closing it cannot
+   tear the capsule down. Deleting the branch still does.
 
 ## When a Capsule Run Fails
 

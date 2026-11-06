@@ -1,8 +1,56 @@
 # Changelog
 
-What's new in Monk. 62 releases between May 28 and October 13, 2026, newest first.
+What's new in Monk. 63 releases between May 28 and November 6, 2026, newest first.
 
 ## Unreleased
+
+## v0.2.0, 2026-11-06
+
+- Monk now requires Monk 4.0.0 or newer. If your machine runs an older Monk, setup and the dashboard
+  tell you it is out of date and offer to upgrade it.
+- On Linux, Monk now reaches Monk 4's background service over its socket. It used to dial a local
+  TCP port that Monk 4 no longer opens, so every call failed with a connection refused error.
+- Saving cloud provider credentials in the dashboard no longer leaves a connection to the Monk
+  daemon open for each attempt, including failed ones. Repeated attempts used to add up until Monk's
+  background service ran out of open files.
+- When Monk's background service runs out of open files, every error that reports it now says so and
+  how to restart it, with how close to the limit it was, instead of a bare "Too many open files".
+  Monk also logs a warning when it is using most of the files it is allowed to open.
+- Capsule setup in cluster mode now explains how a web service gets its own address per branch on a
+  shared cluster, and refuses a cluster that has no node besides its system node, instead of failing
+  on every branch's first push.
+- Capsule setup now checks the region and instance type against what the cloud provider offers, as
+  creating a cluster does, and names the valid ones, instead of failing when the first branch's
+  capsule is built.
+- Capsule setup now says so up front when a personal account is on the Free plan, or an
+  organization's Team plan has ended, since neither can run capsules, instead of failing later when
+  a branch's cluster can't be registered.
+- Deleting a branch now tears down its capsule, even when the capsule has no pull request, and an
+  hourly check removes the capsule of any branch that no longer exists. Run capsule setup again on a
+  project to get this in its workflow.
+- Capsule setup no longer depends on which branch is checked out. Running it from a feature branch
+  used to stop that branch from ever getting a capsule and made it the target of the pull requests
+  Monk opens. It now always uses the repository's default branch.
+- Credentials and secrets saved for a project folder no longer disappear when you add or change the
+  folder's git remote, for example with `git remote add` or when switching it from ssh to https.
+- A folder linked to a Monk project stays linked when its MANIFEST gains or changes its `REPO` line.
+- Monk now tells you when two repositories would share one workspace, for example two projects in
+  folders with the same name, instead of treating both as the same project without saying so. The
+  dashboard shows a notice about it, and its workspace switcher tells same-named workspaces apart by
+  their folders.
+- Running capsule setup again now reuses the capsule key from the last run while it is still valid,
+  and only makes a new one when it is close to expiring. Each run used to add another one-year key.
+- Capsule setup on AWS, Azure and GCP now sets a 30 GB disk when you give none, so provisioning no
+  longer waits on a disk size prompt that a workflow run can't answer.
+- Capsules can now be set up for a project in a personal account. Until now only projects in an
+  organization could use them.
+- Capsule setup now completes for a project whose MANIFEST lists no secrets, and it sends GitHub
+  only the secrets the MANIFEST names.
+- Deploying to a cluster where no node carries the deploy tag, for example a cluster created with
+  custom tags, now stops before anything on the cluster is changed and lists the tags the nodes do
+  carry. Previewing a deploy now follows the workspace's selected environment the same way a deploy
+  does, and uses the default entry when the MANIFEST declares none for it.
+- Creating a cluster with custom tags now says in the result which tag to deploy with.
 
 ## v0.1.71, 2026-10-13
 
