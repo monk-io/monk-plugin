@@ -1,8 +1,30 @@
 # Changelog
 
-What's new in Monk. 63 releases between May 28 and November 6, 2026, newest first.
+What's new in Monk. 64 releases between May 28 and November 11, 2026, newest first.
 
 ## Unreleased
+
+## v0.2.1, 2026-11-11
+
+- Monk now requires Monk 4.0.1 or newer. If your machine runs Monk 4.0.0, setup and the dashboard
+  tell you it is out of date and offer to upgrade it.
+- On Windows, Monk reaches its background service inside WSL again. Monk 4.0.0 stopped answering on
+  the local port Monk used to reach it from Windows, so setup never finished and every operation on
+  your machine failed. Monk 4.0.1 answers on a port that only your own machine can reach, and Monk
+  now uses it. A machine set up with an earlier version switches over the next time Monk starts its
+  background service, without reinstalling.
+- When your coding agent is installed as a strictly confined snap, such as Claude Code from the Snap
+  Store, Monk reaches its background service again. The snap's sandbox can't see the service's
+  socket, so Monk now uses the same local-only port there.
+- Starting Monk's background service now works after it has failed to start several times in a row.
+  The restart used to be refused.
+- Monk now renews your sign-in well before it runs out instead of in the last minute, so long
+  operations such as creating a cluster are much less likely to fail partway with an expired sign-in
+  token.
+- On Linux, right after Monk is installed or updated, Monk now restarts its local agent itself so it
+  can reach Monk's background service, when nothing else is running. It used to wait over a minute
+  and then report that the service was still starting. If it can't restart, it says why and how to
+  do it by hand. An open dashboard tab needs to be reopened after the restart.
 
 ## v0.2.0, 2026-11-06
 
